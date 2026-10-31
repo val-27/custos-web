@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mocha">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custos — Zero-Copy L7 Admission Control for AI Inference Traffic</title>
+  <meta name="description" content="Custos is a Rust #![no_std] wire scanner that enforces single-pass Protobuf TLV invariants with zero heap allocations, protecting GPU/CPU inference runtimes from adversarial KServe v2 payloads." />
+  <meta name="color-scheme" content="dark light" />
+  <meta property="og:title" content="Custos — Zero-Copy L7 Admission Control for AI Inference Traffic" />
+  <meta property="og:description" content="Single-pass Protobuf TLV invariant enforcement with zero heap allocations, in front of Triton Inference Server." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2311111b'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' fill='%23cba6f7' text-anchor='middle'%3EC%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Runs before first paint: restore the saved flavour and opt in to the
+    // scroll-reveal hidden states only when motion is actually wanted.
+    (function () {
+      try {
+        var saved = localStorage.getItem("custos-theme");
+        if (saved === "latte" || saved === "mocha") {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (e) { /* storage blocked — keep the default flavour */ }
+
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduced) document.documentElement.classList.add("motion-ready");
+
+      // Safety net: if the motion layer never boots (blocked/failed script),
+      // drop the hidden states so no content is left invisible.
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          if (!document.documentElement.dataset.motionBooted) {
+            document.documentElement.classList.remove("motion-ready");
+          }
+        }, 1000);
+      });
+    })();
+  </script>
+</head>
+<body>
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+  <!-- Sticky Navigation -->
+  <header class="site-header" id="site-header">
+    <div class="container nav-bar">
+      <a href="#top" class="brand">
+        <span>Custos</span>
+        <span class="brand-caret mono" aria-hidden="true">_</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#threat-taxonomy">Threat Taxonomy</a></li>
+        <li><a href="#wire-inspector">Wire Inspector</a></li>
+        <li><a href="#topologies">Topologies</a></li>
+        <li><a href="#telemetry">Performance</a></li>
+      </ul>
+       <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle Dark/Light Mode">
+         <span id="theme-label" class="mono">Dark Mode</span>
+       </button>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <h2 class="sr-only">Custos</h2>
+      <div class="ascii-wordmark" aria-hidden="true"><span class="row">▄▄▄▄▄▄▄ ▄▄▄ ▄▄▄  ▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄  ▄▄▄▄▄▄</span><span class="row">███ ███ ███ ███ ███ ▀▀▀   ███   ███ ███ ███ ▀▀▀</span><span class="row">███     ███ ███  ▀▀▀██▄   ███   ███ ███  ▀▀▀██▄</span><span class="row">███▄███ ███▄███ ███▄███   ███   ███▄███ ███▄███</span><span class="row">▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀ ▀▀▀▀▀▀    ▀▀▀   ▀▀▀▀▀▀▀ ▀▀▀▀▀▀ </span></div>
+
+      <div class="eyebrow mono reveal">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        Rust #![no_std] • Envoy ext_proc • KServe v2 gRPC
+      </div>
+      <h1 class="reveal">High-Performance, Zero-Copy Layer 7 Admission Control for AI Inference Traffic</h1>
+      <p class="hero-lead reveal">
+        <strong>Custos</strong> stops malicious messages before they reach AI inference servers. It works by scanning incoming requests on the network connection and rejecting any that violate basic message rules. This happens before the AI system reserves memory or starts processing, keeping it fast and safe.
+      </p>
+
+      <div class="stat-strip">
+        <div class="stat-card reveal">
+          <div class="stat-value mono">0 B</div>
+          <div class="stat-label">Extra Memory Used During Scanning</div>
+        </div>
+        <div class="stat-card reveal">
+          <div class="stat-value mono">O(1)</div>
+          <div class="stat-label">Time to Skip Large Data Blocks</div>
+        </div>
+        <div class="stat-card reveal">
+          <div class="stat-value mono">16 Levels</div>
+          <div class="stat-label">Maximum Message Nesting Depth Allowed</div>
+        </div>
+        <div class="stat-card reveal">
+          <div class="stat-value mono">0 Caps</div>
+          <div class="stat-label">Special System Permissions Needed</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 1: Threat Taxonomy & L4->L7 Pivot -->
+    <section id="threat-taxonomy" class="section">
+      <div class="section-header reveal">
+        <span class="section-tag mono">01 / Threat Model &amp; Systems Boundaries</span>
+        <h2 class="section-title">Application-Layer Protobuf Threat Taxonomy</h2>
+        <p class="section-desc">
+          Network firewalls cannot see inside encrypted messages. Many security tools break inference speed by deserializing entire messages. Custos works directly on the encrypted network stream and checks for six common attack patterns that cause crashes or slowdowns.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <article class="card reveal">
+          <h3>
+            <span>1. Protobuf Nesting &amp; SGROUP Bombs</span>
+            <span class="badge badge-red">Stack Exhaustion</span>
+          </h3>
+          <p>
+            An attacker sends messages with many levels of nesting (100s deep), or uses old message formats that parsers don't expect. Normal parsers have to track each level and run out of memory.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The AI server crashes trying to track all the nesting levels.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos stops messages that nest deeper than 16 levels or use old formats, before the AI system sees them.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-nesting">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-nesting" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                Picture a parcel with a smaller parcel inside it, and a smaller one inside that — hundreds deep. Each time the server opens one, it has to jot down where it was so it can find its way back out. Open enough of them and it runs out of notepad and crashes.
+              </p>
+              <p>
+                Custos doesn't open the parcels. It just <strong>counts</strong> them, and the moment it hits number 17 (or sees a disguised legacy box) it throws the whole thing in the bin.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h3>
+            <span>2. Tensor Shape Overflows</span>
+            <span class="badge badge-red">OOM / Integer Wrap</span>
+          </h3>
+          <p>
+            An attacker sends requests that claim the data is extremely large (like declaring a picture is "negative one" pixels or "a billion by a billion" in size), or uses numbers so big they wrap around to become small numbers.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The AI server wastes memory trying to allocate space for data that doesn't really exist and crashes.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos multiplies the claimed size numbers before allowing them. If the size is bad or too large, the request is rejected.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-shape">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-shape" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                Before sending a picture, the request announces how big it is. A liar can claim it's <em>minus one</em> pixels wide, or a billion by a billion. The server believes the label, immediately tries to clear a shelf that enormous, and gets killed for hogging memory.
+              </p>
+              <p>
+                Custos does the <strong>multiplication first</strong>. If the claimed size isn't a sensible number, the request never reaches the shelf.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h3>
+            <span>3. Malformed Varints</span>
+            <span class="badge badge-red">Parser CPU Hang</span>
+          </h3>
+          <p>
+            Numbers in messages are sent in chunks. An attacker sends a chunk that says "there's more" but never sends the next piece, or sends more than 10 chunks when 10 is the limit.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The parser waits forever or runs forever trying to decode the number, freezing an entire AI server worker thread.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos stops reading after 10 chunks and rejects the message if it's not complete by then.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-varint">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-varint" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                Big numbers get sent in small pieces, and every piece ends with "…and there's more coming". A troublemaker sends pieces that <em>always</em> say that and never finish the sentence. A naive reader waits forever, pinning a CPU core at 100%.
+              </p>
+              <p>
+                Custos knows a real number is <strong>never longer than 10 pieces</strong>, so it stops listening at the 11th and rejects the request.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h3>
+            <span>4. Shape-to-Payload Parity Mismatch</span>
+            <span class="badge badge-red">CVE-2025-23320</span>
+          </h3>
+          <p>
+            An attacker declares that a request contains a large image (like "a 224×224 pixel picture"), but only includes 64 bytes of data instead of the 2.4 million bytes that should be there.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The AI system tries to read data that isn't there, reading someone else's data from memory instead, or crashing with an illegal memory access.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos checks that the declared size exactly matches the actual data size. If they don't match, the request is blocked immediately.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-parity">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-parity" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                Imagine ordering a 24-pack of soda (a perfectly reasonable size), but the delivery box only has <em>one</em> can inside. If the warehouse robot blindly grabs 24 cans' worth of space off the conveyor belt, it ends up grabbing 23 cans belonging to the customer behind you.
+              </p>
+              <p>
+                Custos checks that the <strong>weight of the box matches the label</strong> before letting it inside.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h3>
+            <span>5. Shallow Unknown-Field AST Flood</span>
+            <span class="badge badge-red">CVE-2021-22569</span>
+          </h3>
+          <p>
+            Instead of nesting messages deeply, an attacker sends thousands of unrecognized fields (each 2 bytes) all at the top level. The parser doesn't see them as threatening because there's no nesting, but it has to record every one.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The parser allocates huge amounts of memory trying to remember all these unknown fields, slowing or freezing the server.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos stops reading after 1,024 fields total and rejects the message. It never stores unknown fields in memory.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-ast">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-ast" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                Instead of nesting boxes inside boxes, the attacker hands the clerk a single flat sheet covered in 10,000 tiny nonsense sticky notes. A dutiful clerk files a separate manila folder for every sticky note they don't recognize, quickly filling the entire filing room.
+              </p>
+              <p>
+                Custos never creates folders for unknown notes, and if a form has <strong>more than 1,024 fields total</strong>, it rejects it on the spot.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h3>
+            <span>6. Shared-Memory &amp; Model-Repo RPCs</span>
+            <span class="badge badge-red">CVE-2024-0088</span>
+          </h3>
+          <p>
+            An attacker calls administrator functions (commands to load new models or access shared memory) that should only be available to staff, but are exposed on the same port as normal user requests.
+          </p>
+          <p>
+            <strong>Runtime Impact:</strong> The attacker can read or change AI model files, load malicious code, or access other customers' data.
+          </p>
+          <p class="mono defense-note">
+            ✓ Defense: Custos has a list of allowed functions. Any call to admin functions is rejected immediately with an error.
+          </p>
+
+          <div class="eli5">
+            <button class="eli5-trigger" type="button" aria-expanded="false" aria-controls="eli5-rpc">
+              <span class="eli5-bulb" aria-hidden="true">💡</span>
+              <span>ELI5 — explain this simply</span>
+            </button>
+            <div class="eli5-panel" id="eli5-rpc" role="note">
+              <div class="eli5-title">In plain English</div>
+              <p>
+                By default, Triton puts the customer service window (<code>ModelInfer</code>) and the staff-only control room door (<code>RepositoryModelLoad</code>, <code>SystemSharedMemoryRegister</code>) in the exact same hallway with no lock on the door.
+              </p>
+              <p>
+                Custos checks the <strong>door name on the envelope header</strong> before even looking inside — if you aren't asking for an inference or a health check, the door stays locked (`403 Forbidden`).
+              </p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Section 2: Interactive Byte-Level Wire Inspector -->
+    <section id="wire-inspector" class="section">
+      <div class="section-header reveal">
+        <span class="section-tag mono">02 / Zero-Copy Wire Format Analysis</span>
+        <h2 class="section-title">Interactive KServe v2 Protobuf Wire Inspector</h2>
+        <p class="section-desc">
+          Pick a test request below to see exactly what the message looks like when transmitted. Custos breaks down each message into pieces and checks them one at a time. Click any byte block to see what was checked and what the result was.
+        </p>
+      </div>
+
+      <div class="inspector-shell reveal">
+        <aside id="payload-sidebar" class="payload-sidebar"></aside>
+
+        <div class="inspector-main">
+          <div class="inspector-top">
+            <div>
+              <h3 id="ins-title" class="mono">benign_b1</h3>
+              <p id="ins-summary" class="ins-summary"></p>
+            </div>
+            <span id="ins-badge" class="badge badge-green">ALLOW</span>
+          </div>
+
+          <div>
+            <div class="stream-label">
+              On-Wire Byte Stream (Click any TLV segment to inspect)
+            </div>
+            <div id="hex-stream" class="hex-stream"></div>
+          </div>
+
+          <div id="segment-detail" class="segment-detail-box"></div>
+
+          <div class="scanner-verdict-grid">
+            <div class="verdict-cell">
+              <span class="k">Scanner Verdict</span>
+              <span id="v-error" class="v mono">None</span>
+            </div>
+            <div class="verdict-cell">
+              <span class="k">Envoy / gRPC Status</span>
+              <span id="v-http" class="v mono">200 OK</span>
+            </div>
+            <div class="verdict-cell">
+              <span class="k">Nesting Depth Reached</span>
+              <span id="v-depth" class="v mono">1 / 16</span>
+            </div>
+            <div class="verdict-cell">
+              <span class="k">Tensor Shape Product</span>
+              <span id="v-elements" class="v mono">150,528</span>
+            </div>
+            <div class="verdict-cell">
+              <span class="k">O(1) Skipped Bulk Bytes</span>
+              <span id="v-skipped" class="v mono">602,131 B</span>
+            </div>
+            <div class="verdict-cell">
+              <span class="k">Total Framed Size</span>
+              <span id="v-bytes" class="v mono">602,175 B</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Topology Setup Guide -->
+    <section id="topologies" class="section">
+      <div class="section-header reveal">
+        <span class="section-tag mono">03 / Architecture &amp; Experimental Design</span>
+        <h2 class="section-title">Production &amp; Baseline Evaluation Architectures</h2>
+        <p class="section-desc">
+          We tested three different setups to see how much Custos slows things down. One with Custos, one without it but with the reverse proxy, and one with direct access to the AI server. This lets us measure how much protection costs.
+        </p>
+      </div>
+
+      <div class="tabs-header reveal">
+        <button class="tab-btn active" data-topo="prod" type="button">Custos Production (Gateway + Sidecar)</button>
+        <button class="tab-btn" data-topo="baseline" type="button">Proxy Baseline (Envoy Only)</button>
+        <button class="tab-btn" data-topo="control" type="button">Unprotected Control (Direct Triton)</button>
+      </div>
+
+      <div class="topology-stage reveal">
+        <div class="topology-head">
+          <h3 id="topo-title">Custos Production — Gateway + Native Sidecar</h3>
+          <span id="topo-badge" class="badge badge-green">Production Protected</span>
+        </div>
+        <p id="topo-summary" class="topo-summary"></p>
+
+        <div id="topo-flow" class="flow-diagram"></div>
+
+        <div id="topo-specs" class="scanner-verdict-grid"></div>
+      </div>
+    </section>
+
+    <!-- Section 4: Benchmark Telemetry Dashboard -->
+    <section id="telemetry" class="section">
+      <div class="section-header reveal">
+        <span class="section-tag mono">04 / Empirical Evaluation &amp; Telemetry</span>
+        <h2 class="section-title">System Performance &amp; Survivability Dashboard</h2>
+        <p class="section-desc">
+          Shows how fast the three setups handle requests, how many attacks they catch, and how much memory they use. Pick a test scenario below to see results. If you run your own tests, you can load the results here to see your numbers.
+        </p>
+      </div>
+
+      <div class="dashboard-controls reveal">
+         <div class="control-group">
+           <span class="control-label">Regime:</span>
+           <button class="tab-btn active" data-regime="interleaved" type="button">99% Benign / 1% Attack (Interleaved)</button>
+           <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign</button>
+           <button class="tab-btn" data-regime="saturating-burst" type="button">2,000-Req Saturating Burst</button>
+           <button class="tab-btn" data-regime="all" type="button">All Regimes</button>
+         </div>
+       </div>
+
+      <div class="grid-2" style="margin-bottom: 1.5rem;">
+        <div class="chart-box reveal">
+          <h4>Coordinated-Omission Latency CDF (P50 – P99.99, Log Scale)</h4>
+          <div class="chart-sub">Comparing Unprotected Control (Red), Proxy Baseline (Blue), and Custos Production (Green)</div>
+          <svg id="latency-svg" class="svg-chart" viewBox="0 0 540 240" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="chart-box reveal">
+          <h4>Achieved Goodput (Requests / sec)</h4>
+          <div class="chart-sub">Sustained RPC completion rate under offered load</div>
+          <svg id="throughput-svg" class="svg-chart" viewBox="0 0 540 280" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th>Architecture</th>
+              <th>Regime</th>
+              <th>Achieved / Offered RPS</th>
+              <th>P50</th>
+              <th>P99</th>
+              <th>P99.99</th>
+              <th>FPR (Benign Drop)</th>
+              <th>TP Drop Rate</th>
+              <th>Peak RSS</th>
+              <th>Server Survival</th>
+            </tr>
+          </thead>
+          <tbody id="trials-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer container">
+    <p>
+      <strong>Custos</strong> — Zero-Copy L7 Admission Control for AI Inference Traffic (<code>Custos-Gateway</code> &amp; <code>Custos-Bench</code>) • Dark Mode &amp; Light Mode Available
+    </p>
+  </footer>
+
+  <script src="vendor/motion.min.js"></script>
+  <script src="app.js"></script>
+  <script src="motion-init.js"></script>
+</body>
+</html>
