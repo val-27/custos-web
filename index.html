@@ -52,10 +52,27 @@
         <li><a href="#wire-inspector">Wire Inspector</a></li>
         <li><a href="#topologies">Topologies</a></li>
         <li><a href="#telemetry">Performance</a></li>
+        <li class="nav-divider" aria-hidden="true"></li>
+        <li><a href="paper.html">Paper</a></li>
+        <li><a href="docs.html">Docs</a></li>
       </ul>
-       <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle Dark/Light Mode">
-         <span id="theme-label" class="mono">Dark Mode</span>
-       </button>
+      <div class="nav-actions">
+        <a
+          href="https://github.com/val-27/Custos-Gateway"
+          class="github-link"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Custos-Gateway GitHub Repository"
+          title="Custos-Gateway on GitHub"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+        </a>
+        <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle Dark/Light Mode">
+          <span id="theme-label" class="mono">Dark Mode</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -71,13 +88,13 @@
       </div>
       <h1 class="reveal">High-Performance, Zero-Copy Layer 7 Admission Control for AI Inference Traffic</h1>
       <p class="hero-lead reveal">
-        <strong>Custos</strong> stops malicious messages before they reach AI inference servers. It works by scanning incoming requests on the network connection and rejecting any that violate basic message rules. This happens before the AI system reserves memory or starts processing, keeping it fast and safe.
+        <strong>Custos</strong> stops malicious gRPC requests before they reach AI inference backends. After Envoy terminates TLS and reassembles the HTTP/2 request body (capped at 16 MiB per stream), Custos scans the plaintext binary Protobuf wire bytes in place—rejecting structural and tensor-metadata exploits before the inference server deserializes the message or allocates GPU/CPU buffers.
       </p>
 
       <div class="stat-strip">
         <div class="stat-card reveal">
           <div class="stat-value mono">0 B</div>
-          <div class="stat-label">Extra Memory Used During Scanning</div>
+          <div class="stat-label">Scanner Heap Allocations (<code>#![no_std]</code>)</div>
         </div>
         <div class="stat-card reveal">
           <div class="stat-value mono">O(1)</div>
@@ -100,7 +117,7 @@
         <span class="section-tag mono">01 / Threat Model &amp; Systems Boundaries</span>
         <h2 class="section-title">Application-Layer Protobuf Threat Taxonomy</h2>
         <p class="section-desc">
-          Network firewalls cannot see inside encrypted messages. Many security tools break inference speed by deserializing entire messages. Custos works directly on the encrypted network stream and checks for six common attack patterns that cause crashes or slowdowns.
+          Packet-level firewalls are blinded by TLS 1.3 and HTTP/2 stream multiplexing, while L7 filters that deserialize entire Protobuf messages into heap objects bottleneck inference latency. Because Envoy terminates TLS first and passes the plaintext gRPC frame over an in-memory Unix Domain Socket, Custos inspects raw Protobuf wire tags directly in a single pass—blocking six classes of parser and runtime exploits without building an AST.
         </p>
       </div>
 
@@ -108,16 +125,16 @@
         <article class="card reveal">
           <h3>
             <span>1. Protobuf Nesting &amp; SGROUP Bombs</span>
-            <span class="badge badge-red">Stack Exhaustion</span>
+            <span class="badge badge-red">CVE-2024-7254-Class</span>
           </h3>
           <p>
-            An attacker sends messages with many levels of nesting (100s deep), or uses old message formats that parsers don't expect. Normal parsers have to track each level and run out of memory.
+            An attacker sends deeply nested length-delimited submessages (100s deep) or deprecated Protobuf v2 <code>SGROUP</code> (Wire Type 3) tags (the bug class illustrated by <code>CVE-2024-7254</code>) to bypass recursion counters and exhaust parser call stacks.
           </p>
           <p>
-            <strong>Runtime Impact:</strong> The AI server crashes trying to track all the nesting levels.
+            <strong>Runtime Impact:</strong> Recursive C++ and managed Protobuf parsers exhaust thread stack frames or stall CPU cores walking deeply nested trees.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Custos stops messages that nest deeper than 16 levels or use old formats, before the AI system sees them.
+            ✓ Defense: Iterative 16-frame stack array (<code>[ScopeFrame; 16]</code>) rejects depth &ge; 17 and immediately blocks Wire Types 3/4/6/7 &amp; compressed frames (<code>flag != 0x00</code>).
           </p>
 
           <div class="eli5">
@@ -204,16 +221,16 @@
         <article class="card reveal">
           <h3>
             <span>4. Shape-to-Payload Parity Mismatch</span>
-            <span class="badge badge-red">CVE-2025-23320</span>
+            <span class="badge badge-red">CVE-2025-23334-Class</span>
           </h3>
           <p>
-            An attacker declares that a request contains a large image (like "a 224×224 pixel picture"), but only includes 64 bytes of data instead of the 2.4 million bytes that should be there.
+            An attacker declares a valid fixed-width tensor shape (e.g., <code>[4, 3, 224, 224]</code> <code>FP32</code> = 2.41 MB), passing element-count limits, but supplies only 64 bytes in <code>raw_input_contents</code>—or sends oversized/mismatched buffers that trigger backend memory errors (as seen in the <code>CVE-2025-23319/23320/23334</code> Triton advisory chain).
           </p>
           <p>
-            <strong>Runtime Impact:</strong> The AI system tries to read data that isn't there, reading someone else's data from memory instead, or crashing with an illegal memory access.
+            <strong>Runtime Impact:</strong> Backend runtimes that trust declared tensor dimensions over actual buffer length risk out-of-bounds over-reads, segmentation faults, or IPC error leaks.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Custos checks that the declared size exactly matches the actual data size. If they don't match, the request is blocked immediately.
+            ✓ Defense: Verifies exact byte parity (<code>&prod; dim_i &times; sizeof(T) == len(raw_input_contents)</code>) for fixed-width tensors while enforcing 4-byte length-prefix lower bounds for variable-width <code>BYTES</code> tensors (0% false positives).
           </p>
 
           <div class="eli5">
@@ -227,7 +244,7 @@
                 Imagine ordering a 24-pack of soda (a perfectly reasonable size), but the delivery box only has <em>one</em> can inside. If the warehouse robot blindly grabs 24 cans' worth of space off the conveyor belt, it ends up grabbing 23 cans belonging to the customer behind you.
               </p>
               <p>
-                Custos checks that the <strong>weight of the box matches the label</strong> before letting it inside.
+                Custos checks that the <strong>weight of the box matches the label</strong> before letting it inside—and knows how to handle variable-length text boxes (<code>BYTES</code> tensors) without false alarms.
               </p>
             </div>
           </div>
@@ -236,16 +253,16 @@
         <article class="card reveal">
           <h3>
             <span>5. Shallow Unknown-Field AST Flood</span>
-            <span class="badge badge-red">CVE-2021-22569</span>
+            <span class="badge badge-red">CVE-2022-1941-Class</span>
           </h3>
           <p>
-            Instead of nesting messages deeply, an attacker sends thousands of unrecognized fields (each 2 bytes) all at the top level. The parser doesn't see them as threatening because there's no nesting, but it has to record every one.
+            Instead of nesting deeply, an attacker packs thousands of 2-byte unrecognized varint tags at root depth (<code>D=0</code>)—exploiting the Protobuf unknown-field accumulation bug class (<code>CVE-2022-1941</code> in C++ <code>libprotobuf</code>, <code>CVE-2021-22569</code> in Java).
           </p>
           <p>
-            <strong>Runtime Impact:</strong> The parser allocates huge amounts of memory trying to remember all these unknown fields, slowing or freezing the server.
+            <strong>Runtime Impact:</strong> Standard parsers accumulate every unknown tag into an in-memory <code>UnknownFieldSet</code>, causing 10&times;&ndash;50&times; heap amplification and allocator contention.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Custos stops reading after 1,024 fields total and rejects the message. It never stores unknown fields in memory.
+            ✓ Defense: Enforces a strict 1,024-tag scan ceiling per message and never allocates an <code>UnknownFieldSet</code> in memory.
           </p>
 
           <div class="eli5">
@@ -267,17 +284,17 @@
 
         <article class="card reveal">
           <h3>
-            <span>6. Shared-Memory &amp; Model-Repo RPCs</span>
+            <span>6. Shared-Memory Params &amp; Admin RPCs</span>
             <span class="badge badge-red">CVE-2024-0088</span>
           </h3>
           <p>
-            An attacker calls administrator functions (commands to load new models or access shared memory) that should only be available to staff, but are exposed on the same port as normal user requests.
+            Attackers either invoke unauthenticated administrative RPCs (<code>SystemSharedMemoryRegister</code>, <code>RepositoryModelLoad</code>) OR bypass header-only allowlists by injecting <code>shared_memory_region</code>, <code>shared_memory_offset</code>, and <code>shared_memory_byte_size</code> inside <code>ModelInfer</code> parameter maps (the public <code>CVE-2024-0088</code> trigger).
           </p>
           <p>
-            <strong>Runtime Impact:</strong> The attacker can read or change AI model files, load malicious code, or access other customers' data.
+            <strong>Runtime Impact:</strong> Out-of-bounds shared-memory offset/size parameters allow reading or corrupting arbitrary host/IPC memory or loading unauthorized models.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Custos has a list of allowed functions. Any call to admin functions is rejected immediately with an error.
+            ✓ Defense: Dual-stage enforcement blocks admin RPC paths at <code>RequestHeaders</code> (<code>403 Forbidden</code>) AND scans <code>ModelInfer</code> parameter map keys in <code>RequestBody</code> to reject <code>shared_memory_*</code> injection (<code>400 Bad Request</code>).
           </p>
 
           <div class="eli5">
@@ -288,10 +305,10 @@
             <div class="eli5-panel" id="eli5-rpc" role="note">
               <div class="eli5-title">In plain English</div>
               <p>
-                By default, Triton puts the customer service window (<code>ModelInfer</code>) and the staff-only control room door (<code>RepositoryModelLoad</code>, <code>SystemSharedMemoryRegister</code>) in the exact same hallway with no lock on the door.
+                By default, Triton puts the customer service window (<code>ModelInfer</code>) and the staff-only control room door (<code>RepositoryModelLoad</code>, <code>SystemSharedMemoryRegister</code>) in the same hallway—and even lets normal forms sneak in staff-only memory pointers (<code>shared_memory_offset</code>).
               </p>
               <p>
-                Custos checks the <strong>door name on the envelope header</strong> before even looking inside — if you aren't asking for an inference or a health check, the door stays locked (`403 Forbidden`).
+                Custos locks the staff-only doors at the header stage (<code>403 Forbidden</code>) <strong>and</strong> checks inside every normal inference form to block hidden <code>shared_memory_*</code> parameters before they reach Triton.
               </p>
             </div>
           </div>
@@ -407,6 +424,11 @@
            <button class="tab-btn" data-regime="saturating-burst" type="button">2,000-Req Saturating Burst</button>
            <button class="tab-btn" data-regime="all" type="button">All Regimes</button>
          </div>
+         <div class="control-group">
+           <label class="tab-btn" for="json-file-input" style="cursor:pointer;">📂 Load custos-bench JSONs</label>
+           <input id="json-file-input" type="file" accept=".json,application/json" multiple style="display:none;" />
+           <span id="json-import-status" class="mono" style="font-size:0.8rem;color:var(--ctp-subtext0);"></span>
+         </div>
        </div>
 
       <div class="grid-2" style="margin-bottom: 1.5rem;">
@@ -435,7 +457,7 @@
               <th>P99.99</th>
               <th>FPR (Benign Drop)</th>
               <th>TP Drop Rate</th>
-              <th>Peak RSS</th>
+              <th title="Total Peak RSS across the data path (Triton + Envoy + Sidecar)">Total Peak RSS</th>
               <th>Server Survival</th>
             </tr>
           </thead>

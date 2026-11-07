@@ -348,6 +348,115 @@ code {
   transform: scaleX(1);
 }
 
+.nav-divider {
+  width: 1px;
+  height: 1.1rem;
+  background-color: var(--ctp-surface1);
+  flex-shrink: 0;
+}
+
+.nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  background: var(--ctp-surface0);
+  color: var(--ctp-text);
+  border: 1px solid var(--ctp-surface1);
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  transition: border-color var(--t-fast), background-color var(--t-fast),
+              color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
+}
+
+.github-link:hover {
+  border-color: var(--ctp-lavender);
+  background: var(--ctp-surface1);
+  color: var(--ctp-mauve);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--ctp-lavender) 80%, transparent);
+}
+
+.github-link:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* --- Placeholder / Subpage Sections (Paper & Docs) ------------------------ */
+.tbd-section {
+  padding: 5rem 0 6rem;
+  min-height: calc(100vh - 11rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tbd-card {
+  width: 100%;
+  max-width: 680px;
+  background: var(--ctp-mantle);
+  border: 1px solid var(--ctp-surface0);
+  border-radius: var(--r-xl);
+  padding: 3rem 2.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-lifted);
+}
+
+.tbd-card h1 {
+  font-size: clamp(1.8rem, 3.2vw, 2.4rem);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.75rem;
+}
+
+.tbd-status {
+  display: inline-block;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--ctp-mauve);
+  letter-spacing: 0.08em;
+  margin: 1rem 0 1.25rem;
+  padding: 0.35rem 1.25rem;
+  background: color-mix(in srgb, var(--ctp-mauve) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ctp-mauve) 35%, transparent);
+  border-radius: var(--r-md);
+}
+
+.tbd-desc {
+  color: var(--ctp-subtext0);
+  font-size: 0.96rem;
+  max-width: 48ch;
+  margin: 0 auto 2rem;
+}
+
+.tbd-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--ctp-surface0);
+  color: var(--ctp-text);
+  border: 1px solid var(--ctp-surface1);
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color var(--t-fast), background-color var(--t-fast),
+              color var(--t-fast), transform var(--t-fast);
+}
+
+.tbd-back-link:hover {
+  border-color: var(--ctp-mauve);
+  background: var(--ctp-surface1);
+  color: var(--ctp-mauve);
+  transform: translateY(-1px);
+}
+
 .theme-btn {
   position: relative;
   background: var(--ctp-surface0);
