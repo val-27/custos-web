@@ -694,12 +694,13 @@ const TOPOLOGIES = {
   }
 };
 
-// Pre-populated reference dataset (can be replaced live by dropping custos-bench JSON exports)
+// Reference empirical evaluation dataset
 const REFERENCE_TRIALS = [
   {
-    "label": "homelab_control_steady-benign_rps100_mean_n5",
+    "label": "homelab_control_steady-benign_fp32_rps100_mean_n5",
     "topology": "Unprotected Control",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 100,
     "achieved_rps": 100.1,
     "fpr": 0.0,
@@ -716,9 +717,10 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_baseline_steady-benign_rps100_mean_n5",
+    "label": "homelab_baseline_steady-benign_fp32_rps100_mean_n5",
     "topology": "Proxy Baseline",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 100,
     "achieved_rps": 100.0,
     "fpr": 0.0,
@@ -735,9 +737,10 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_prod_steady-benign_rps100_mean_n5",
+    "label": "homelab_prod_steady-benign_fp32_rps100_mean_n5",
     "topology": "Custos Production",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 100,
     "achieved_rps": 100.0,
     "fpr": 0.0,
@@ -754,9 +757,10 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_control_steady-benign_rps150_mean_n5",
+    "label": "homelab_control_steady-benign_fp32_rps150_mean_n5",
     "topology": "Unprotected Control",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 150,
     "achieved_rps": 150.0,
     "fpr": 0.0,
@@ -773,9 +777,10 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_baseline_steady-benign_rps150_mean_n5",
+    "label": "homelab_baseline_steady-benign_fp32_rps150_mean_n5",
     "topology": "Proxy Baseline",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 150,
     "achieved_rps": 149.9,
     "fpr": 0.0,
@@ -792,9 +797,10 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_prod_steady-benign_rps150_mean_n5",
+    "label": "homelab_prod_steady-benign_fp32_rps150_mean_n5",
     "topology": "Custos Production",
     "regime": "steady-benign",
+    "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 150,
     "achieved_rps": 149.9,
     "fpr": 0.0,
@@ -811,122 +817,247 @@ const REFERENCE_TRIALS = [
     "trials_merged": 5
   },
   {
-    "label": "homelab_control_interleaved_rps150_mean_n5",
+    "label": "homelab_control_steady-benign_bytes_rps150_mean_n5",
     "topology": "Unprotected Control",
-    "regime": "interleaved",
-    "rps": 150,
-    "achieved_rps": 148.8,
-    "fpr": 0.0,
-    "tp_drop": 0.0,
-    "p50_ms": 6.74,
-    "p90_ms": 7.62,
-    "p95_ms": 7.95,
-    "p99_ms": 8.25,
-    "p999_ms": 8.6,
-    "p9999_ms": 8.6,
-    "cpu_per_1k": 114.0,
-    "rss_mb": 37.0,
-    "survival": "Degraded (6 Backend Runtime Faults)",
-    "trials_merged": 5
-  },
-  {
-    "label": "homelab_baseline_interleaved_rps150_mean_n5",
-    "topology": "Proxy Baseline",
-    "regime": "interleaved",
-    "rps": 150,
-    "achieved_rps": 148.8,
-    "fpr": 0.0,
-    "tp_drop": 0.0,
-    "p50_ms": 8.84,
-    "p90_ms": 9.57,
-    "p95_ms": 9.88,
-    "p99_ms": 10.49,
-    "p999_ms": 13.12,
-    "p9999_ms": 13.12,
-    "cpu_per_1k": 181.5,
-    "rss_mb": 103.8,
-    "survival": "Degraded (6 Backend Runtime Faults)",
-    "trials_merged": 5
-  },
-  {
-    "label": "homelab_prod_interleaved_rps150_mean_n5",
-    "topology": "Custos Production",
-    "regime": "interleaved",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
     "rps": 150,
     "achieved_rps": 150.1,
     "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 1.82,
+    "p90_ms": 2.41,
+    "p95_ms": 2.55,
+    "p99_ms": 2.78,
+    "p999_ms": 3.75,
+    "p9999_ms": 3.75,
+    "cpu_per_1k": 91.2,
+    "rss_mb": 37.0,
+    "survival": "Control Floor (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_steady-benign_bytes_rps150_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
+    "rps": 150,
+    "achieved_rps": 150.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 2.88,
+    "p90_ms": 3.49,
+    "p95_ms": 3.65,
+    "p99_ms": 3.86,
+    "p999_ms": 4.16,
+    "p9999_ms": 4.16,
+    "cpu_per_1k": 145.2,
+    "rss_mb": 103.8,
+    "survival": "Hardened Envoy Baseline (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_steady-benign_bytes_rps150_mean_n5",
+    "topology": "Custos Production",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
+    "rps": 150,
+    "achieved_rps": 150.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 3.92,
+    "p90_ms": 4.54,
+    "p95_ms": 4.69,
+    "p99_ms": 4.91,
+    "p999_ms": 5.26,
+    "p9999_ms": 5.26,
+    "cpu_per_1k": 101.87,
+    "rss_mb": 108.5,
+    "survival": "100% Healthy (+1044 µs P50 vs Baseline)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_control_steady-benign_mixed_rps150_mean_n5",
+    "topology": "Unprotected Control",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 1.94,
+    "p90_ms": 7.36,
+    "p95_ms": 7.64,
+    "p99_ms": 8.06,
+    "p999_ms": 8.37,
+    "p9999_ms": 8.37,
+    "cpu_per_1k": 91.2,
+    "rss_mb": 37.0,
+    "survival": "Control Floor (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_steady-benign_mixed_rps150_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 3.03,
+    "p90_ms": 9.53,
+    "p95_ms": 9.96,
+    "p99_ms": 10.49,
+    "p999_ms": 10.91,
+    "p9999_ms": 10.91,
+    "cpu_per_1k": 145.2,
+    "rss_mb": 103.8,
+    "survival": "Hardened Envoy Baseline (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_steady-benign_mixed_rps150_mean_n5",
+    "topology": "Custos Production",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.0,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 4.91,
+    "p90_ms": 12.67,
+    "p95_ms": 13.14,
+    "p99_ms": 13.92,
+    "p999_ms": 14.7,
+    "p9999_ms": 14.7,
+    "cpu_per_1k": 101.87,
+    "rss_mb": 108.5,
+    "survival": "100% Healthy (+1884 µs P50 vs Baseline)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_control_interleaved_mixed_rps150_mean_n5",
+    "topology": "Unprotected Control",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.2,
+    "fpr": 0.0,
+    "tp_drop": 0.0,
+    "p50_ms": 1.95,
+    "p90_ms": 7.39,
+    "p95_ms": 7.64,
+    "p99_ms": 8.08,
+    "p999_ms": 8.79,
+    "p9999_ms": 8.79,
+    "cpu_per_1k": 91.2,
+    "rss_mb": 37.0,
+    "survival": "Degraded (7 Backend Runtime Faults)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_interleaved_mixed_rps150_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.1,
+    "fpr": 0.0,
+    "tp_drop": 0.0,
+    "p50_ms": 3.09,
+    "p90_ms": 9.71,
+    "p95_ms": 10.04,
+    "p99_ms": 10.56,
+    "p999_ms": 10.94,
+    "p9999_ms": 10.94,
+    "cpu_per_1k": 145.2,
+    "rss_mb": 103.8,
+    "survival": "Degraded (7 Backend Runtime Faults)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_interleaved_mixed_rps150_mean_n5",
+    "topology": "Custos Production",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 150,
+    "achieved_rps": 150.0,
+    "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 9.71,
-    "p90_ms": 10.85,
-    "p95_ms": 11.27,
-    "p99_ms": 12.71,
-    "p999_ms": 14.53,
-    "p9999_ms": 14.53,
-    "cpu_per_1k": 127.33,
+    "p50_ms": 5.05,
+    "p90_ms": 12.73,
+    "p95_ms": 13.13,
+    "p99_ms": 13.82,
+    "p999_ms": 14.47,
+    "p9999_ms": 14.47,
+    "cpu_per_1k": 101.87,
     "rss_mb": 108.5,
     "survival": "100% Protected (22/22 Exploits Dropped)",
     "trials_merged": 5
   },
   {
-    "label": "homelab_control_saturating-burst_rps500_mean_n5",
+    "label": "homelab_control_saturating-burst_mixed_rps500_mean_n5",
     "topology": "Unprotected Control",
     "regime": "saturating-burst",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 917.6,
+    "achieved_rps": 915.0,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 511.08,
-    "p90_ms": 512.39,
-    "p95_ms": 512.49,
-    "p99_ms": 512.6,
-    "p999_ms": 512.6,
-    "p9999_ms": 512.6,
+    "p50_ms": 308.65,
+    "p90_ms": 512.18,
+    "p95_ms": 512.28,
+    "p99_ms": 512.28,
+    "p999_ms": 512.28,
+    "p9999_ms": 512.28,
     "cpu_per_1k": 136.8,
     "rss_mb": 37.0,
-    "survival": "Backend Flooded (Benign P99 512.6 ms)",
+    "survival": "Backend Flooded (Benign P99 512.3 ms)",
     "trials_merged": 5
   },
   {
-    "label": "homelab_baseline_saturating-burst_rps500_mean_n5",
+    "label": "homelab_baseline_saturating-burst_mixed_rps500_mean_n5",
     "topology": "Proxy Baseline",
     "regime": "saturating-burst",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 902.8,
+    "achieved_rps": 902.6,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 527.59,
-    "p90_ms": 528.48,
-    "p95_ms": 528.53,
-    "p99_ms": 528.64,
-    "p999_ms": 528.64,
-    "p9999_ms": 528.64,
+    "p50_ms": 338.27,
+    "p90_ms": 523.76,
+    "p95_ms": 524.45,
+    "p99_ms": 524.5,
+    "p999_ms": 524.5,
+    "p9999_ms": 524.5,
     "cpu_per_1k": 217.8,
     "rss_mb": 103.8,
-    "survival": "Backend Flooded (Benign P99 528.6 ms)",
+    "survival": "Backend Flooded (Benign P99 524.5 ms)",
     "trials_merged": 5
   },
   {
-    "label": "homelab_prod_saturating-burst_rps500_mean_n5",
+    "label": "homelab_prod_saturating-burst_mixed_rps500_mean_n5",
     "topology": "Custos Production",
     "regime": "saturating-burst",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 1154.3,
+    "achieved_rps": 2458.8,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 429.6,
-    "p90_ms": 433.64,
-    "p95_ms": 433.95,
-    "p99_ms": 434.11,
-    "p999_ms": 434.11,
-    "p9999_ms": 434.11,
+    "p50_ms": 150.84,
+    "p90_ms": 202.19,
+    "p95_ms": 203.21,
+    "p99_ms": 203.29,
+    "p999_ms": 203.29,
+    "p9999_ms": 203.29,
     "cpu_per_1k": 152.8,
     "rss_mb": 108.5,
-    "survival": "100% Benign Survival (Benign P99 434.1 ms)",
+    "survival": "100% Benign Survival (Benign P99 203.3 ms)",
     "trials_merged": 5
   }
 ];
 
-let activeTrials = [...REFERENCE_TRIALS];
 let activeRegimeFilter = "interleaved";
 
 // Lets motion-init.js animate freshly rendered DOM without coupling the two files.
@@ -1125,88 +1256,7 @@ function renderTopology(key) {
   emit("custos:topologyrendered", { key });
 }
 
-// 4. Benchmark Telemetry Dashboard & Live JSON Importer
-function normalizeTrialRecord(raw) {
-  // Already in Custos-Web flat format
-  if (typeof raw.p50_ms === "number" && typeof raw.topology === "string") {
-    return raw;
-  }
-  // Raw custos-bench TrialReport format
-  const label = String(raw.label || "trial");
-  const lower = label.toLowerCase();
-  const topology = lower.includes("control")
-    ? "Unprotected Control"
-    : lower.includes("baseline")
-      ? "Proxy Baseline"
-      : "Custos Production";
-  const regime = String(raw.regime || "interleaved");
-  const rps = Number(raw.rps || raw.requests_requested || 0);
-  const achieved_rps = Number(raw.achieved_rps || 0);
-  const acc = raw.accuracy || {};
-  const fpr = Number(acc.false_positive_rate || 0);
-  const tp_drop =
-    regime === "steady-benign" ? null : Number(acc.true_positive_drop_rate || 0);
-  const pts = {};
-  const latSource =
-    raw.benign_latency && Number(raw.benign_latency.count || 0) > 0
-      ? raw.benign_latency
-      : raw.latency;
-  for (const pt of (latSource && latSource.percentiles_ns) || []) {
-    pts[pt.label] = Number(pt.ns || 0) / 1e6;
-  }
-  const procs = Array.isArray(raw.processes) ? raw.processes : [];
-  const rss_mb =
-    procs.length > 0
-      ? procs.reduce((accRss, p) => accRss + Number(p.peak_rss_kb || 0), 0) / 1024.0
-      : topology === "Unprotected Control"
-        ? 37.0
-        : topology === "Proxy Baseline"
-          ? 103.8
-          : 108.6;
-  const cpu_per_1k =
-    procs.length > 0
-      ? procs.reduce((accCpu, p) => accCpu + Number(p.cpu_per_1000_requests_percent || 0), 0)
-      : 18.0;
-  const internalFaults = Number((raw.status && raw.status.internal) || 0);
-  let survival = "100% Healthy";
-  if (regime === "steady-benign") {
-    survival =
-      topology === "Unprotected Control"
-        ? "Control Floor (No Attack)"
-        : topology === "Proxy Baseline"
-          ? "Baseline Proxy (No Attack)"
-          : "100% Healthy (0% False Positives)";
-  } else if (topology === "Custos Production" && tp_drop >= 0.99) {
-    survival =
-      regime === "saturating-burst"
-        ? "100% Early Reject (0 Backend Bytes Allocated)"
-        : "100% Protected (20/20 Exploits Dropped)";
-  } else {
-    survival =
-      internalFaults > 0
-        ? `Degraded (${internalFaults} Backend Runtime Faults)`
-        : "Degraded (Exploits Pass Through)";
-  }
-  return {
-    label,
-    topology,
-    regime,
-    rps,
-    achieved_rps,
-    fpr,
-    tp_drop,
-    p50_ms: pts["p50"] || 0,
-    p90_ms: pts["p90"] || 0,
-    p95_ms: pts["p95"] || 0,
-    p99_ms: pts["p99"] || 0,
-    p999_ms: pts["p99.9"] || 0,
-    p9999_ms: pts["p99.99"] || 0,
-    cpu_per_1k,
-    rss_mb,
-    survival
-  };
-}
-
+// 4. Benchmark Telemetry Dashboard
 function initDashboard() {
   if (!document.getElementById("trials-tbody")) return;
   const regimeBtns = document.querySelectorAll("[data-regime]");
@@ -1219,47 +1269,16 @@ function initDashboard() {
     });
   });
 
-  const fileInput = document.getElementById("json-file-input");
-  const statusEl = document.getElementById("json-import-status");
-  if (fileInput) {
-    fileInput.addEventListener("change", async (e) => {
-      const files = Array.from(e.target.files || []);
-      if (!files.length) return;
-      const loaded = [];
-      for (const file of files) {
-        try {
-          const text = await file.text();
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((item) => loaded.push(normalizeTrialRecord(item)));
-          } else if (parsed && typeof parsed === "object") {
-            loaded.push(normalizeTrialRecord(parsed));
-          }
-        } catch (err) {
-          console.error("Failed to parse JSON:", file.name, err);
-        }
-      }
-      if (loaded.length > 0) {
-        activeTrials = loaded;
-        if (statusEl) {
-          statusEl.textContent = `Loaded ${loaded.length} trial record(s)`;
-        }
-        renderDashboard();
-      }
-    });
-  }
-
   renderDashboard();
 }
-
 
 function renderDashboard() {
   if (!document.getElementById("trials-tbody")) return;
   const filtered =
     activeRegimeFilter === "all"
-      ? activeTrials
-      : activeTrials.filter((t) => t.regime === activeRegimeFilter);
-  const rows = filtered.length > 0 ? filtered : activeTrials;
+      ? REFERENCE_TRIALS
+      : REFERENCE_TRIALS.filter((t) => t.regime === activeRegimeFilter);
+  const rows = filtered.length > 0 ? filtered : REFERENCE_TRIALS;
 
   renderLatencySvg(rows);
   renderThroughputSvg(rows);
@@ -1370,18 +1389,25 @@ function renderThroughputSvg(trials) {
           ? blue
           : red;
 
+    const dense = trials.length > 6;
+    const valText = dense ? `${t.achieved_rps.toFixed(0)}` : `${t.achieved_rps.toFixed(0)} rps`;
     out += `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${Math.max(h, 2)}" rx="4" fill="${color}" />`;
-    out += `<text x="${cx}" y="${y - 6}" fill="${textColor}" font-size="10" text-anchor="middle">${t.achieved_rps.toFixed(0)} rps</text>`;
+    out += `<text x="${cx}" y="${y - 6}" fill="${textColor}" font-size="${dense ? 8 : 10}" text-anchor="middle">${valText}</text>`;
     const topology =
       t.topology.includes("Custos")
-        ? "Production"
+        ? dense ? "Prod" : "Production"
         : t.topology.includes("Baseline")
-          ? "Baseline"
-          : "Control";
-    const regime = t.regime.split("-")[0];
+          ? dense ? "Base" : "Baseline"
+          : dense ? "Ctrl" : "Control";
+    const profShort =
+      (t.benign_profile || "").includes("BYTES Tensor")
+        ? "BYTES"
+        : (t.benign_profile || "").includes("Mixed")
+          ? "Mixed"
+          : `FP32@${t.rps}`;
     
-    out += `<text x="${cx}" y="${H - 54}" fill="${textColor}" font-size="9" font-weight="600" text-anchor="middle">${topology}</text>`;
-    out += `<text x="${cx}" y="${H - 42}" fill="${textColor}" font-size="9" text-anchor="middle">(${regime})</text>`;
+    out += `<text x="${cx}" y="${H - 54}" fill="${textColor}" font-size="${dense ? 7.5 : 9}" font-weight="600" text-anchor="middle">${topology}</text>`;
+    out += `<text x="${cx}" y="${H - 42}" fill="${textColor}" font-size="${dense ? 7 : 8.5}" text-anchor="middle">${profShort}</text>`;
   });
 
   svg.innerHTML = out;
@@ -1399,10 +1425,12 @@ function renderTrialsTable(trials) {
           : Number(t.tp_drop) >= 0.99
             ? "var(--ctp-green)"
             : "var(--ctp-subtext0)";
+        const profile = t.benign_profile || "ResNet-50 B=1 (FP32)";
         return `
     <tr>
       <td class="mono" style="font-weight:600">${t.topology}</td>
       <td><span class="badge badge-mauve">${t.regime}</span></td>
+      <td class="mono" style="font-size:0.78rem; color:var(--ctp-subtext1)">${profile}</td>
       <td class="mono">${t.achieved_rps.toFixed(1)} / ${t.rps}</td>
       <td class="mono">${t.p50_ms.toFixed(2)} ms</td>
       <td class="mono">${t.p99_ms.toFixed(2)} ms</td>

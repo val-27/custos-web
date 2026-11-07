@@ -223,7 +223,7 @@
 
   /* --- Dashboard charts ----------------------------------------------------
      Latency polylines draw themselves in via stroke-dashoffset; goodput bars
-     grow from their baseline. Re-runs on every re-render (filter, import,
+     grow from their baseline. Re-runs on every re-render (filter,
      theme switch), which keeps the charts feeling live.                     */
   function animateCharts() {
     $$("#latency-svg polyline").forEach(function (line, i) {

@@ -412,7 +412,7 @@
         <span class="section-tag mono">04 / Empirical Evaluation &amp; Telemetry</span>
         <h2 class="section-title">System Performance &amp; Survivability Dashboard</h2>
         <p class="section-desc">
-          Shows how fast the three setups handle requests, how many attacks they catch, and how much memory they use. Pick a test scenario below to see results. If you run your own tests, you can load the results here to see your numbers.
+          Empirical multi-trial (`N=5`) measurements from <code>Custos-Bench</code> across all benign payload families—fixed-width <code>ResNet-50 FP32</code> tensors, variable-width <code>BYTES [1, 2]</code> string tensors, and <code>D=15..16</code> boundary-nested submessages—tested alongside all 22 adversarial exploit payloads.
         </p>
       </div>
 
@@ -420,14 +420,9 @@
          <div class="control-group">
            <span class="control-label">Regime:</span>
            <button class="tab-btn active" data-regime="interleaved" type="button">99% Benign / 1% Attack (Interleaved)</button>
-           <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign</button>
-           <button class="tab-btn" data-regime="saturating-burst" type="button">2,000-Req Saturating Burst</button>
+           <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign (FP32, BYTES &amp; Mixed)</button>
+           <button class="tab-btn" data-regime="saturating-burst" type="button">Saturating Burst (90% Attack / 10% Benign)</button>
            <button class="tab-btn" data-regime="all" type="button">All Regimes</button>
-         </div>
-         <div class="control-group">
-           <label class="tab-btn" for="json-file-input" style="cursor:pointer;">📂 Load custos-bench JSONs</label>
-           <input id="json-file-input" type="file" accept=".json,application/json" multiple style="display:none;" />
-           <span id="json-import-status" class="mono" style="font-size:0.8rem;color:var(--ctp-subtext0);"></span>
          </div>
        </div>
 
@@ -451,6 +446,7 @@
             <tr>
               <th>Architecture</th>
               <th>Regime</th>
+              <th>Benign Profile</th>
               <th>Achieved / Offered RPS</th>
               <th>P50</th>
               <th>P99</th>
