@@ -88,17 +88,17 @@
       </div>
       <h1 class="reveal">High-Performance, Zero-Copy Layer 7 Admission Control for AI Inference Traffic</h1>
       <p class="hero-lead reveal">
-        <strong>Custos</strong> stops malicious gRPC requests before they reach AI inference backends. After Envoy terminates TLS and reassembles the HTTP/2 request body (capped at 16 MiB per stream), Custos scans the plaintext binary Protobuf wire bytes in place—rejecting structural and tensor-metadata exploits before the inference server deserializes the message or allocates GPU/CPU buffers.
+        <strong>Custos</strong> stops malicious gRPC requests before they reach AI inference backends. After Envoy reassembles the HTTP/2 request body (capped at 16 MiB per stream), Custos scans the binary Protobuf wire bytes in place over a shared Unix Domain Socket—rejecting structural and tensor-metadata exploits before the inference server deserializes the message or allocates buffers.
       </p>
 
       <div class="stat-strip">
         <div class="stat-card reveal">
           <div class="stat-value mono">0 B</div>
-          <div class="stat-label">Scanner Heap Allocations (<code>#![no_std]</code>)</div>
+          <div class="stat-label">Core Scanner Heap Allocations (<code>#![no_std]</code>)</div>
         </div>
         <div class="stat-card reveal">
           <div class="stat-value mono">O(1)</div>
-          <div class="stat-label">Time to Skip Large Data Blocks</div>
+          <div class="stat-label">Bulk Tensor Slice Skip (<code>Field 7</code>)</div>
         </div>
         <div class="stat-card reveal">
           <div class="stat-value mono">16 Levels</div>
@@ -117,7 +117,7 @@
         <span class="section-tag mono">01 / Threat Model &amp; Systems Boundaries</span>
         <h2 class="section-title">Application-Layer Protobuf Threat Taxonomy</h2>
         <p class="section-desc">
-          Packet-level firewalls are blinded by TLS 1.3 and HTTP/2 stream multiplexing, while L7 filters that deserialize entire Protobuf messages into heap objects bottleneck inference latency. Because Envoy terminates TLS first and passes the plaintext gRPC frame over an in-memory Unix Domain Socket, Custos inspects raw Protobuf wire tags directly in a single pass—blocking six classes of parser and runtime exploits without building an AST.
+          Packet-level firewalls cannot parse multiplexed HTTP/2 gRPC streams, while L7 filters that deserialize entire Protobuf messages into heap objects add avoidable latency. Because Envoy reassembles HTTP/2 DATA frames into a contiguous buffer and passes the gRPC frame over an in-memory Unix Domain Socket, Custos inspects raw Protobuf wire tags directly in a single pass—blocking six classes of parser and runtime exploits without building an AST.
         </p>
       </div>
 
@@ -220,17 +220,17 @@
 
         <article class="card reveal">
           <h3>
-            <span>4. Shape-to-Payload Parity Mismatch</span>
-            <span class="badge badge-red">CVE-2025-23334-Class</span>
+            <span>4. Per-Input Shape &amp; Buffer Parity</span>
+            <span class="badge badge-red">KServe v2 Wire Invariant</span>
           </h3>
           <p>
-            An attacker declares a valid fixed-width tensor shape (e.g., <code>[4, 3, 224, 224]</code> <code>FP32</code> = 2.41 MB), passing element-count limits, but supplies only 64 bytes in <code>raw_input_contents</code>—or sends oversized/mismatched buffers that trigger backend memory errors (as seen in the <code>CVE-2025-23319/23320/23334</code> Triton advisory chain).
+            An attacker declares a valid fixed-width tensor shape (e.g., <code>[4, 3, 224, 224]</code> <code>FP32</code> = 2.41 MB), passing element-count ceilings, but supplies a truncated 64-byte <code>raw_input_contents</code> chunk, swaps multi-tensor chunks, omits payload bytes, or crafts an overrunning 4-byte <code>BYTES</code> length prefix. <em>(Separately, NVIDIA's <code>CVE-2025-23320</code> and <code>CVE-2025-23334</code> advisories cover Python-backend shared-memory name disclosure on oversized payloads and subsequent shared-memory OOB read.)</em>
           </p>
           <p>
-            <strong>Runtime Impact:</strong> Backend runtimes that trust declared tensor dimensions over actual buffer length risk out-of-bounds over-reads, segmentation faults, or IPC error leaks.
+            <strong>Runtime Impact:</strong> Backends that bind input metadata to mismatched raw tensor chunks risk out-of-bounds buffer reads or unhandled runtime exceptions.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Verifies exact byte parity (<code>&prod; dim_i &times; sizeof(T) == len(raw_input_contents)</code>) for fixed-width tensors while enforcing 4-byte length-prefix lower bounds for variable-width <code>BYTES</code> tensors (0% false positives).
+            ✓ Defense: Enforces 1-to-1 per-input parity between each <code>InferInputTensor</code> and its <code>raw_input_contents[i]</code> chunk (or inline <code>InferTensorContents</code>), plus exact 4-byte little-endian prefix walking for <code>BYTES</code> tensors.
           </p>
 
           <div class="eli5">
@@ -244,7 +244,7 @@
                 Imagine ordering a 24-pack of soda (a perfectly reasonable size), but the delivery box only has <em>one</em> can inside. If the warehouse robot blindly grabs 24 cans' worth of space off the conveyor belt, it ends up grabbing 23 cans belonging to the customer behind you.
               </p>
               <p>
-                Custos checks that the <strong>weight of the box matches the label</strong> before letting it inside—and knows how to handle variable-length text boxes (<code>BYTES</code> tensors) without false alarms.
+                Custos checks that the <strong>weight of every individual box matches its label</strong> before letting it inside—and walks the 4-byte length headers inside variable-length text boxes (<code>BYTES</code> tensors) without false alarms.
               </p>
             </div>
           </div>
@@ -252,17 +252,17 @@
 
         <article class="card reveal">
           <h3>
-            <span>5. Shallow Unknown-Field AST Flood</span>
+            <span>5. Shallow Unknown-Field &amp; Packed-Tag Flood</span>
             <span class="badge badge-red">CVE-2022-1941-Class</span>
           </h3>
           <p>
-            Instead of nesting deeply, an attacker packs thousands of 2-byte unrecognized varint tags at root depth (<code>D=0</code>)—exploiting the Protobuf unknown-field accumulation bug class (<code>CVE-2022-1941</code> in C++ <code>libprotobuf</code>, <code>CVE-2021-22569</code> in Java).
+            Instead of nesting deeply, an attacker packs thousands of 2-byte unrecognized varint tags at root depth (<code>D=0</code>) or floods packed repeated fields—exercising the Protobuf parser resource-exhaustion bug class (<code>CVE-2022-1941</code> in C++ <code>protobuf-cpp</code>, <code>CVE-2021-22569</code> in <code>protobuf-java</code>).
           </p>
           <p>
-            <strong>Runtime Impact:</strong> Standard parsers accumulate every unknown tag into an in-memory <code>UnknownFieldSet</code>, causing 10&times;&ndash;50&times; heap amplification and allocator contention.
+            <strong>Runtime Impact:</strong> Standard parsers accumulate unrecognized tags in an in-memory <code>UnknownFieldSet</code> or spend linear CPU decoding millions of unit-value dimensions.
           </p>
           <p class="mono defense-note">
-            ✓ Defense: Enforces a strict 1,024-tag scan ceiling per message and never allocates an <code>UnknownFieldSet</code> in memory.
+            ✓ Defense: Enforces a strict 1,024-tag scan ceiling per message (covering both TLV tags and packed shape/contents varints) and never allocates an <code>UnknownFieldSet</code>.
           </p>
 
           <div class="eli5">
@@ -273,10 +273,10 @@
             <div class="eli5-panel" id="eli5-ast" role="note">
               <div class="eli5-title">In plain English</div>
               <p>
-                Instead of nesting boxes inside boxes, the attacker hands the clerk a single flat sheet covered in 10,000 tiny nonsense sticky notes. A dutiful clerk files a separate manila folder for every sticky note they don't recognize, quickly filling the entire filing room.
+                Instead of nesting boxes inside boxes, the attacker hands the clerk a single flat sheet covered in thousands of tiny nonsense sticky notes. A dutiful clerk files a separate manila folder for every sticky note they don't recognize, quickly filling the entire filing room.
               </p>
               <p>
-                Custos never creates folders for unknown notes, and if a form has <strong>more than 1,024 fields total</strong>, it rejects it on the spot.
+                Custos never creates folders for unknown notes, and if a form has <strong>more than 1,024 tags or dimensions total</strong>, it rejects it on the spot.
               </p>
             </div>
           </div>
@@ -288,10 +288,10 @@
             <span class="badge badge-red">CVE-2024-0088</span>
           </h3>
           <p>
-            Attackers either invoke unauthenticated administrative RPCs (<code>SystemSharedMemoryRegister</code>, <code>RepositoryModelLoad</code>) OR bypass header-only allowlists by injecting <code>shared_memory_region</code>, <code>shared_memory_offset</code>, and <code>shared_memory_byte_size</code> inside <code>ModelInfer</code> parameter maps (the public <code>CVE-2024-0088</code> trigger).
+            Attackers either invoke administrative RPCs (<code>SystemSharedMemoryRegister</code>, <code>RepositoryModelLoad</code>) OR bypass header-only allowlists by injecting <code>shared_memory_region</code>, <code>shared_memory_offset</code>, and <code>shared_memory_byte_size</code> inside <code>ModelInfer</code> parameter maps (<code>CVE-2024-0088</code>: out-of-bounds offset and byte size relative to a registered shared-memory region).
           </p>
           <p>
-            <strong>Runtime Impact:</strong> Out-of-bounds shared-memory offset/size parameters allow reading or corrupting arbitrary host/IPC memory or loading unauthorized models.
+            <strong>Runtime Impact:</strong> Out-of-bounds shared-memory offset/size parameters allow reading or corrupting shared memory outside the registered region or loading unauthorized models.
           </p>
           <p class="mono defense-note">
             ✓ Defense: Dual-stage enforcement blocks admin RPC paths at <code>RequestHeaders</code> (<code>403 Forbidden</code>) AND scans <code>ModelInfer</code> parameter map keys in <code>RequestBody</code> to reject <code>shared_memory_*</code> injection (<code>400 Bad Request</code>).
@@ -412,16 +412,16 @@
         <span class="section-tag mono">04 / Empirical Evaluation &amp; Telemetry</span>
         <h2 class="section-title">System Performance &amp; Survivability Dashboard</h2>
         <p class="section-desc">
-          Empirical multi-trial (`N=5`) measurements from <code>Custos-Bench</code> across all benign payload families—fixed-width <code>ResNet-50 FP32</code> tensors, variable-width <code>BYTES [1, 2]</code> string tensors, and <code>D=15..16</code> boundary-nested submessages—tested alongside all 22 adversarial exploit payloads.
+          Empirical multi-trial (`N=5`) measurements from <code>Custos-Bench</code> across all benign payload families—fixed-width <code>ResNet-50 FP32</code> tensors, variable-width <code>BYTES [1, 2]</code> string tensors, and <code>D=15..16</code> boundary-nested submessages—tested alongside all 33 adversarial <code>.pb</code> exploit payloads and a 59-payload <code>oracle-sweep</code> (<code>39/39</code> rejects blocked, <code>20/20</code> benign allowed).
         </p>
       </div>
 
       <div class="dashboard-controls reveal">
          <div class="control-group">
            <span class="control-label">Regime:</span>
-           <button class="tab-btn active" data-regime="interleaved" type="button">99% Benign / 1% Attack (Interleaved)</button>
+           <button class="tab-btn active" data-regime="interleaved" type="button">94% Benign / 6% Attack (Interleaved)</button>
            <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign (FP32, BYTES &amp; Mixed)</button>
-           <button class="tab-btn" data-regime="saturating-burst" type="button">Saturating Burst (90% Attack / 10% Benign)</button>
+           <button class="tab-btn" data-regime="saturating-burst" type="button">Saturating Burst (C=500 Fan-Out: 90% Attack / 10% Benign)</button>
            <button class="tab-btn" data-regime="all" type="button">All Regimes</button>
          </div>
        </div>

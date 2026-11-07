@@ -95,7 +95,7 @@ const WIRE_PAYLOADS = [
     tensorElements: "2 string elements (>= 8 B length prefixes)",
     skippedBytes: "118 B (O(1) cursor jump)",
     summary:
-      "A legitimate variable-length string/bytes tensor (datatype = 'BYTES', shape [1, 2]). Unlike fixed-width tensors (FP32), BYTES elements are prefixed by 4-byte lengths in raw_input_contents, so size != shape * elem_width. Custos tracks variable-width BYTES tensors and verifies the 4B-per-element lower bound without false positives.",
+      "A legitimate variable-length string/bytes tensor (datatype = 'BYTES', shape [1, 2]). Unlike fixed-width tensors (FP32), BYTES elements are prefixed by 4-byte little-endian lengths in raw_input_contents. Custos walks each 4-byte u32 prefix inside the chunk to verify that exactly 2 elements fit without buffer over-read or false positives.",
     segments: [
       {
         kind: "grpc",
@@ -110,15 +110,15 @@ const WIRE_PAYLOADS = [
         label: "Field 5: datatype = 'BYTES' (Variable Width)",
         offset: "0x27..0x3E",
         detail:
-          "Inside InputTensor scope: Field 2 datatype is 'BYTES' (0x42 59 54 45 53). Scanner sets frame.is_bytes_dtype = true so exact fixed-width equality does not falsely reject this request."
+          "Inside InferInputTensor scope: Field 2 datatype is 'BYTES' (0x42 59 54 45 53). Scanner sets tensor_is_bytes = true for input_specs[0]."
       },
       {
         kind: "shape",
         bytes: "1A 02 01 02",
-        label: "Tensor Field 3: shape [1, 2] -> min 8 B",
+        label: "Tensor Field 3: shape [1, 2] -> 2 Strings",
         offset: "0x3E..0x42",
         detail:
-          "Packed shape [1, 2] = 2 elements. Because is_bytes_dtype is true, finalize_frame_stats records min_variable_input_bytes += 2 * 4 = 8 bytes (mandatory 4-byte length prefix per element)."
+          "Packed shape [1, 2] = 2 elements. InputTensorSpec[0] records elements = 2, is_bytes = true (minimum 8 bytes of 4B length prefixes)."
       },
       {
         kind: "skip",
@@ -126,7 +126,7 @@ const WIRE_PAYLOADS = [
         label: "Field 7: 72 B Length-Prefixed Strings (ALLOW)",
         offset: "0x42..0x8B",
         detail:
-          "Actual raw_input_contents is 72 bytes >= min_variable_input_bytes (8 bytes). Admitted with 0% false positive rate."
+          "verify_bytes_chunk() walks 2 little-endian u32 prefixes (37 B + 27 B + 8 B prefixes = 72 B == raw_chunks[0].len). Admitted with 0% false positive rate."
       }
     ]
   },
@@ -206,15 +206,15 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "tag",
-        bytes: "2A 22  2A 20  2A 1E ... (depths 1..16)",
+        bytes: "22 22  22 20  22 1E ... (depths 1..16)",
         label: "16 Nested Wire Type 2 Scopes",
         offset: "0x0F..0x2F",
         detail:
-          "Each 0x2A + length varint pushes a ScopeFrame onto the fixed stack array up to MAX_DEPTH = 16."
+          "Each 0x22 (Field 4 parameters) + length varint pushes a ScopeFrame onto the fixed stack array up to MAX_DEPTH = 16."
       },
       {
         kind: "exploit",
-        bytes: "2A 02 [08 01]",
+        bytes: "22 02 [08 01]",
         label: "Depth 17 Submessage Tag (ABORT)",
         offset: "0x2F..0x33",
         detail:
@@ -401,7 +401,7 @@ const WIRE_PAYLOADS = [
   {
     id: "shape_buffer_mismatch_underread",
     group: "Exploit Family 2: Shape Overflows",
-    name: "shape_buffer_mismatch (CVE-2025-23334-Class)",
+    name: "shape_buffer_mismatch (KServe v2 Per-Input Parity)",
     badge: "REJECT",
     badgeClass: "badge-red",
     category: "shape_overflow",
@@ -414,7 +414,7 @@ const WIRE_PAYLOADS = [
     tensorElements: "602,112 elements (2,408,448 B expected)",
     skippedBytes: "90 B (O(1) jump)",
     summary:
-      "Declares a 4-image FP32 batch ([4, 3, 224, 224] = 2,408,448 bytes) that passes element-count limits, but supplies only 64 bytes in raw_input_contents to trigger an out-of-bounds buffer over-read (CVE-2025-23334-class). Custos enforces exact byte parity for fixed-width tensors.",
+      "Declares a 4-image FP32 batch ([4, 3, 224, 224] = 2,408,448 bytes) that passes element-count limits, but supplies only 64 bytes in raw_input_contents[0], violating KServe v2 per-input buffer parity. Custos matches input_specs[i] 1-to-1 against raw_chunks[i] (or InferTensorContents).",
     segments: [
       {
         kind: "grpc",
@@ -429,7 +429,7 @@ const WIRE_PAYLOADS = [
         label: "Field 5: datatype = FP32 (4B/elem)",
         offset: "0x1B..0x35",
         detail:
-          "Inside InputTensor scope, kserve_datatype_byte_width('FP32') records elem_byte_width = 4."
+          "Inside InferInputTensor scope, kserve_datatype_byte_width('FP32') records tensor_elem_width = 4."
       },
       {
         kind: "shape",
@@ -437,7 +437,7 @@ const WIRE_PAYLOADS = [
         label: "Shape [4, 3, 224, 224] -> 2,408,448 B",
         offset: "0x35..0x3D",
         detail:
-          "Packed shape product = 602,112 elements. On InputTensor scope exit, expected_raw_input_bytes += 602,112 * 4 = 2,408,448 bytes."
+          "Packed shape product = 602,112 elements. On InferInputTensor scope exit, input_specs[0].expected_bytes = 602,112 * 4 = 2,408,448 bytes."
       },
       {
         kind: "exploit",
@@ -445,7 +445,7 @@ const WIRE_PAYLOADS = [
         label: "Field 7: Only 64 B Supplied (ABORT)",
         offset: "0x3D..0x7B",
         detail:
-          "Root Field 7 declares length 64 (0x40). At end-of-message parity verification, actual_raw_input_bytes (64) != expected_raw_input_bytes (2,408,448) -> ParseError::PayloadSizeMismatch -> custos_denied:payload_size_mismatch."
+          "Root Field 7 chunk 0 declares length 64 (0x40). At 1-to-1 per-input parity verification, raw_chunks[0].len (64) != input_specs[0].expected_bytes (2,408,448) -> ParseError::PayloadSizeMismatch -> custos_denied:payload_size_mismatch."
       }
     ]
   },
@@ -582,11 +582,11 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "exploit",
-        bytes: "22 2D [0A 14 'shared_memory_region'  12 15 ...]",
+        bytes: "22 2D [0A 14 'shared_memory_region'  12 15 1A 13 'triton_shm_internal']",
         label: "Field 4: parameters['shared_memory_region'] (ABORT)",
         offset: "0x46..0x75",
         detail:
-          "Tag 0x22 (InputTensor Field 4: parameters map entry) pushes MsgContext::ParameterMapEntry. Inside it, Field 1 (Tag 0x0A) has key 'shared_memory_region'. Custos matches prefix 'shared_memory' and immediately aborts with ParseError::UnauthorizedSharedMemoryParameter."
+          "Tag 0x22 (InputTensor Field 4: parameters map entry) pushes MsgContext::ParameterMapEntry (with InferParameter string_param = 3 / int64_param = 2). Inside it, Field 1 (Tag 0x0A) has key 'shared_memory_region'. Custos matches prefix 'shared_memory' and immediately aborts with ParseError::UnauthorizedSharedMemoryParameter."
       }
     ]
   }
@@ -598,7 +598,7 @@ const TOPOLOGIES = {
     badge: "Production Protected",
     badgeClass: "badge-green",
     summary:
-      "The Custos setup with protection: A reverse proxy sits at the front door and passes requests to Custos for checking. Custos rejects bad messages before they reach the AI system. Requests then go to the AI inference server.",
+      "The Custos setup with protection: Envoy reassembles incoming HTTP/2 gRPC streams (capped at 16 MiB) and passes the buffered frame over a shared Unix Domain Socket to custos-proc. Custos rejects malformed wire messages before they reach the inference server.",
     nodes: [
       {
         title: "gRPC Inference Client",
@@ -608,88 +608,88 @@ const TOPOLOGIES = {
       },
       {
         title: "Gateway: Envoy Proxy",
-        meta: "Port :8003 (:8001) • UID 10001",
-        desc: "Terminates TLS/HTTP2, enforces CVE-2023-44487 flood limits, buffers body (16 MiB cap), fail-closed.",
+        meta: "Port :8003 (NodePort :30803) • UID 10001",
+        desc: "Demultiplexes HTTP/2, enforces empty-frame limits, buffers body (16 MiB cap), fail-closed (250 ms ext_proc deadline).",
         cls: ""
       },
       {
         title: "Sidecar: custos-proc",
         meta: "RAM UDS 0660 • drop: [ALL]",
-        desc: "Zero-allocation #![no_std] TLV wire scanner & RPC allowlist. Drops all 20 exploits in <15 µs.",
+        desc: "Zero-allocation #![no_std] TLV wire scanner & RPC allowlist. Drops 33/33 .pb exploit payloads (and 39/39 oracle rejects) before backend deserialization.",
         cls: "highlight-custos"
       },
       {
-        title: "NVIDIA Triton Server",
-        meta: "Upstream :9001 • GPU Node",
-        desc: "ONNX Runtime ResNet-50 v1.5 backend. Only receives structurally verified KServe v2 requests.",
+        title: "KServe v2 Backend (tritonserver)",
+        meta: "Upstream :9001 • worker-1 CPU Node",
+        desc: "32-worker KServe v2 gRPC backend (triton_sim.rs). Only receives structurally verified KServe v2 requests.",
         cls: ""
       }
     ],
     specs: [
+      ["Manifest / Config", "configmap-envoy.yaml + deployment-gateway-pod.yaml"],
       ["IPC Transport", "In-Memory Unix Domain Socket (/var/run/custos/ext_proc.sock, 0660)"],
-      ["Failure & Security Policy", "Fail-Closed (failure_mode_allow: false) • runAsNonRoot (UID 10001, 0 Caps)"],
-      ["L7 & HTTP/2 Hardening", "KServe v2 RPC Allowlist + CVE-2023-44487 Rapid Reset Flood Limits"],
-      ["Attack Survival Verdict", "100% Triton Uptime • 20/20 Exploits Dropped • 0% False Positives"]
+      ["Failure & Security Policy", "Fail-Closed (failure_mode_allow: false, 250ms timeout) • UID 10001, 0 Caps"],
+      ["Attack Survival Verdict", "100% Benign Survival • 33/33 Exploits Dropped (59/59 Oracle Sweep) • 0% False Positives"]
     ]
   },
   baseline: {
-    title: "Proxy Baseline — Standard Envoy HTTP/2 Ingress (No Custos Sidecar)",
+    title: "Proxy Baseline — Hardened Envoy HTTP/2 Ingress (No Custos Sidecar)",
     badge: "Proxy Baseline",
     badgeClass: "badge-blue",
     summary:
-      "The baseline: A reverse proxy sits at the front but does NOT check messages—it just passes them straight through to the AI system. This shows how much speed is lost by using Custos.",
+      "The hardened proxy baseline: Identical Envoy HTTP/2 configuration (16 MiB buffer filter, access log, 15s/30s timeouts, HTTP/2 empty-frame protections) with only the ext_proc filter removed. Isolates the exact cost and security impact of the custos-proc sidecar.",
     nodes: [
       {
         title: "gRPC Inference Client",
         meta: "custos-bench • RawCodec",
-        desc: "Fires steady-benign, 99%/1% interleaved, and 2,000-concurrency burst regimes.",
+        desc: "Fires steady-benign, 94%/6% interleaved (all 33 .pb exploits), C=500 burst, and 59-case oracle-sweep regimes.",
         cls: ""
       },
       {
         title: "Envoy Proxy (No Sidecar)",
-        meta: "Port :8002 • Router Only",
-        desc: "Standard HTTPConnectionManager + Router filter only. Blind to inner Protobuf TLV semantics.",
+        meta: "Port :8002 (NodePort :30802) • Buffer + Router",
+        desc: "Identical HTTP/2 & 16 MiB buffer config without ext_proc. Blind to inner Protobuf TLV semantics.",
         cls: ""
       },
       {
-        title: "NVIDIA Triton Server",
+        title: "KServe v2 Backend (tritonserver)",
         meta: "Upstream :9001 • Exposed",
         desc: "Exposed to nesting bombs, 64-bit shape overflows, parity mismatches, and varint hangs.",
         cls: "highlight-danger"
       }
     ],
     specs: [
-      ["Manifest / Config", "03-envoy-baseline.yaml / envoy-topology-b-baseline.yaml"],
-      ["HTTP Filters", "envoy.filters.http.router only (no ext_proc sidecar)"],
-      ["Scientific Role", "Isolates Envoy HTTP/2 proxy cost from custos-proc UDS wire-scanning cost"],
-      ["Vulnerability State", "Vulnerable to all 6 L7 Protobuf wire & RPC exploit families"]
+      ["Manifest / Config", "deployment-envoy-baseline-pod.yaml / envoy-baseline.yaml"],
+      ["HTTP Filters", "envoy.filters.http.buffer (16 MiB) + envoy.filters.http.router (no ext_proc)"],
+      ["Scientific Role", "Isolates Envoy HTTP/2 proxy & 16 MiB buffering cost from custos-proc UDS scan"],
+      ["Vulnerability State", "Passes all 33 L7 Protobuf wire & parameter exploits (<16 MiB) to backend"]
     ]
   },
   control: {
-    title: "Unprotected Control — Direct NVIDIA Triton Inference Server",
+    title: "Unprotected Control — Direct KServe v2 gRPC Backend",
     badge: "Unprotected Control",
     badgeClass: "badge-red",
     summary:
-      "The unprotected setup: Requests go straight to the AI system with no checking at all. This shows what happens when there's no protection—attacks cause crashes or slow performance.",
+      "The unprotected control group: Requests go straight to the KServe v2 gRPC listener (NodePort :30801 in the LAN testbed) without Envoy or Custos. Establishes the raw backend latency floor and unprotected failure behavior.",
     nodes: [
       {
         title: "gRPC Inference Client",
         meta: "custos-bench • RawCodec",
-        desc: "Sends raw KServe v2 gRPC frames directly to Triton's native gRPC listener.",
+        desc: "Sends raw KServe v2 gRPC frames directly to the backend gRPC service.",
         cls: ""
       },
       {
-        title: "NVIDIA Triton Server",
-        meta: "Port :8001 • Direct Ingress",
-        desc: "Directly parses untrusted Protobuf wire bytes on C++ inference worker threads.",
+        title: "KServe v2 Backend (tritonserver)",
+        meta: "Port :9001 (NodePort :30801) • Direct",
+        desc: "Directly parses untrusted Protobuf wire bytes on 32 backend worker slots.",
         cls: "highlight-danger"
       }
     ],
     specs: [
-      ["Data Path", "Direct HTTP/2 gRPC to tritonserver (:8001)"],
+      ["Data Path", "Direct HTTP/2 gRPC to triton-inference-svc (NodePort :30801 -> :9001)"],
       ["Admission Control", "None (Control Group)"],
-      ["Scientific Role", "Establishes raw inference latency floor & unprotected failure behavior"],
-      ["Vulnerability State", "Directly exposed to C++ Protobuf parser, allocator & SHM RPC exploits"]
+      ["Scientific Role", "Establishes raw backend latency floor & unprotected worker stall behavior"],
+      ["Vulnerability State", "Directly exposed to all 33 Protobuf wire, shape, parity & parameter exploits"]
     ]
   }
 };
@@ -705,14 +705,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 6.83,
-    "p90_ms": 7.42,
-    "p95_ms": 7.53,
-    "p99_ms": 7.75,
-    "p999_ms": 8.31,
-    "p9999_ms": 8.31,
-    "cpu_per_1k": 171.0,
-    "rss_mb": 37.0,
+    "p50_ms": 7.18,
+    "p90_ms": 7.7,
+    "p95_ms": 7.8,
+    "p99_ms": 8.03,
+    "p999_ms": 8.18,
+    "p9999_ms": 8.18,
+    "cpu_per_1k": 65.75,
+    "rss_mb": 29.39,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -725,14 +725,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.0,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 9.05,
-    "p90_ms": 9.55,
-    "p95_ms": 9.68,
-    "p99_ms": 9.92,
-    "p999_ms": 11.13,
-    "p9999_ms": 11.13,
-    "cpu_per_1k": 272.25,
-    "rss_mb": 103.8,
+    "p50_ms": 9.17,
+    "p90_ms": 9.74,
+    "p95_ms": 9.88,
+    "p99_ms": 10.1,
+    "p999_ms": 10.62,
+    "p9999_ms": 10.62,
+    "cpu_per_1k": 147.14,
+    "rss_mb": 107.3,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -742,18 +742,18 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 100,
-    "achieved_rps": 100.0,
+    "achieved_rps": 99.9,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 11.3,
-    "p90_ms": 12.16,
-    "p95_ms": 12.33,
-    "p99_ms": 12.82,
-    "p999_ms": 15.76,
-    "p9999_ms": 15.76,
-    "cpu_per_1k": 191.0,
-    "rss_mb": 108.5,
-    "survival": "100% Healthy (+2246 µs P50 vs Baseline)",
+    "p50_ms": 11.98,
+    "p90_ms": 12.65,
+    "p95_ms": 12.83,
+    "p99_ms": 13.12,
+    "p999_ms": 13.9,
+    "p9999_ms": 13.9,
+    "cpu_per_1k": 219.34,
+    "rss_mb": 149.79,
+    "survival": "100% Healthy (+2815 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -765,14 +765,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.0,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 6.68,
-    "p90_ms": 7.51,
-    "p95_ms": 7.83,
-    "p99_ms": 8.16,
-    "p999_ms": 9.39,
-    "p9999_ms": 9.39,
-    "cpu_per_1k": 114.0,
-    "rss_mb": 37.0,
+    "p50_ms": 6.75,
+    "p90_ms": 7.59,
+    "p95_ms": 7.94,
+    "p99_ms": 8.21,
+    "p999_ms": 8.95,
+    "p9999_ms": 8.95,
+    "cpu_per_1k": 61.73,
+    "rss_mb": 29.59,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -785,14 +785,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 8.93,
-    "p90_ms": 9.6,
-    "p95_ms": 9.85,
-    "p99_ms": 10.47,
-    "p999_ms": 13.22,
-    "p9999_ms": 13.22,
-    "cpu_per_1k": 181.5,
-    "rss_mb": 103.8,
+    "p50_ms": 8.82,
+    "p90_ms": 9.66,
+    "p95_ms": 9.94,
+    "p99_ms": 10.46,
+    "p999_ms": 13.37,
+    "p9999_ms": 13.37,
+    "cpu_per_1k": 127.78,
+    "rss_mb": 107.53,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -805,15 +805,75 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 9.89,
-    "p90_ms": 10.98,
-    "p95_ms": 11.42,
-    "p99_ms": 12.51,
-    "p999_ms": 14.74,
-    "p9999_ms": 14.74,
-    "cpu_per_1k": 127.33,
-    "rss_mb": 108.5,
-    "survival": "100% Healthy (+961 µs P50 vs Baseline)",
+    "p50_ms": 9.9,
+    "p90_ms": 10.93,
+    "p95_ms": 11.23,
+    "p99_ms": 11.85,
+    "p999_ms": 13.32,
+    "p9999_ms": 13.32,
+    "cpu_per_1k": 148.4,
+    "rss_mb": 150.03,
+    "survival": "100% Healthy (+1077 µs P50 vs Baseline)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_control_steady-benign_bytes_rps100_mean_n5",
+    "topology": "Unprotected Control",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
+    "rps": 100,
+    "achieved_rps": 100.2,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 1.72,
+    "p90_ms": 2.23,
+    "p95_ms": 2.31,
+    "p99_ms": 2.42,
+    "p999_ms": 2.48,
+    "p9999_ms": 2.48,
+    "cpu_per_1k": 7.46,
+    "rss_mb": 29.65,
+    "survival": "Control Floor (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_steady-benign_bytes_rps100_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
+    "rps": 100,
+    "achieved_rps": 100.2,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 2.89,
+    "p90_ms": 3.39,
+    "p95_ms": 3.45,
+    "p99_ms": 3.53,
+    "p999_ms": 4.46,
+    "p9999_ms": 4.46,
+    "cpu_per_1k": 35.45,
+    "rss_mb": 107.54,
+    "survival": "Hardened Envoy Baseline (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_steady-benign_bytes_rps100_mean_n5",
+    "topology": "Custos Production",
+    "regime": "steady-benign",
+    "benign_profile": "BYTES Tensor [1, 2]",
+    "rps": 100,
+    "achieved_rps": 100.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 4.06,
+    "p90_ms": 4.62,
+    "p95_ms": 4.71,
+    "p99_ms": 4.82,
+    "p999_ms": 5.6,
+    "p9999_ms": 5.6,
+    "cpu_per_1k": 69.24,
+    "rss_mb": 150.04,
+    "survival": "100% Healthy (+1173 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -822,17 +882,17 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "BYTES Tensor [1, 2]",
     "rps": 150,
-    "achieved_rps": 150.1,
+    "achieved_rps": 150.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 1.82,
-    "p90_ms": 2.41,
-    "p95_ms": 2.55,
-    "p99_ms": 2.78,
-    "p999_ms": 3.75,
-    "p9999_ms": 3.75,
-    "cpu_per_1k": 91.2,
-    "rss_mb": 37.0,
+    "p50_ms": 1.79,
+    "p90_ms": 2.35,
+    "p95_ms": 2.5,
+    "p99_ms": 2.71,
+    "p999_ms": 2.82,
+    "p9999_ms": 2.82,
+    "cpu_per_1k": 7.38,
+    "rss_mb": 29.65,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -845,14 +905,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 2.88,
-    "p90_ms": 3.49,
-    "p95_ms": 3.65,
-    "p99_ms": 3.86,
-    "p999_ms": 4.16,
-    "p9999_ms": 4.16,
-    "cpu_per_1k": 145.2,
-    "rss_mb": 103.8,
+    "p50_ms": 2.98,
+    "p90_ms": 3.6,
+    "p95_ms": 3.73,
+    "p99_ms": 3.96,
+    "p999_ms": 4.69,
+    "p9999_ms": 4.69,
+    "cpu_per_1k": 34.87,
+    "rss_mb": 107.54,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -865,15 +925,75 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 3.92,
-    "p90_ms": 4.54,
+    "p50_ms": 3.95,
+    "p90_ms": 4.55,
     "p95_ms": 4.69,
-    "p99_ms": 4.91,
+    "p99_ms": 4.92,
     "p999_ms": 5.26,
     "p9999_ms": 5.26,
-    "cpu_per_1k": 101.87,
-    "rss_mb": 108.5,
-    "survival": "100% Healthy (+1044 µs P50 vs Baseline)",
+    "cpu_per_1k": 67.24,
+    "rss_mb": 150.04,
+    "survival": "100% Healthy (+970 µs P50 vs Baseline)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_control_steady-benign_mixed_rps100_mean_n5",
+    "topology": "Unprotected Control",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.2,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 2.18,
+    "p90_ms": 7.48,
+    "p95_ms": 7.73,
+    "p99_ms": 8.0,
+    "p999_ms": 8.42,
+    "p9999_ms": 8.42,
+    "cpu_per_1k": 23.74,
+    "rss_mb": 46.22,
+    "survival": "Control Floor (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_steady-benign_mixed_rps100_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.2,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 3.35,
+    "p90_ms": 9.89,
+    "p95_ms": 10.1,
+    "p99_ms": 10.46,
+    "p999_ms": 10.88,
+    "p9999_ms": 10.88,
+    "cpu_per_1k": 66.26,
+    "rss_mb": 134.91,
+    "survival": "Hardened Envoy Baseline (No Attack)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_steady-benign_mixed_rps100_mean_n5",
+    "topology": "Custos Production",
+    "regime": "steady-benign",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.1,
+    "fpr": 0.0,
+    "tp_drop": null,
+    "p50_ms": 4.53,
+    "p90_ms": 12.87,
+    "p95_ms": 13.14,
+    "p99_ms": 13.46,
+    "p999_ms": 13.94,
+    "p9999_ms": 13.94,
+    "cpu_per_1k": 115.31,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+1184 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -882,17 +1002,17 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 150,
-    "achieved_rps": 150.1,
+    "achieved_rps": 150.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 1.94,
-    "p90_ms": 7.36,
-    "p95_ms": 7.64,
-    "p99_ms": 8.06,
-    "p999_ms": 8.37,
-    "p9999_ms": 8.37,
-    "cpu_per_1k": 91.2,
-    "rss_mb": 37.0,
+    "p50_ms": 1.96,
+    "p90_ms": 7.43,
+    "p95_ms": 7.69,
+    "p99_ms": 8.08,
+    "p999_ms": 8.66,
+    "p9999_ms": 8.66,
+    "cpu_per_1k": 23.5,
+    "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -905,14 +1025,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 3.03,
-    "p90_ms": 9.53,
-    "p95_ms": 9.96,
-    "p99_ms": 10.49,
-    "p999_ms": 10.91,
-    "p9999_ms": 10.91,
-    "cpu_per_1k": 145.2,
-    "rss_mb": 103.8,
+    "p50_ms": 3.31,
+    "p90_ms": 10.08,
+    "p95_ms": 10.45,
+    "p99_ms": 10.92,
+    "p999_ms": 11.62,
+    "p9999_ms": 11.62,
+    "cpu_per_1k": 63.5,
+    "rss_mb": 134.91,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -922,18 +1042,78 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 150,
-    "achieved_rps": 150.0,
+    "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 4.91,
-    "p90_ms": 12.67,
-    "p95_ms": 13.14,
-    "p99_ms": 13.92,
-    "p999_ms": 14.7,
-    "p9999_ms": 14.7,
-    "cpu_per_1k": 101.87,
-    "rss_mb": 108.5,
-    "survival": "100% Healthy (+1884 µs P50 vs Baseline)",
+    "p50_ms": 4.74,
+    "p90_ms": 13.23,
+    "p95_ms": 13.6,
+    "p99_ms": 14.05,
+    "p999_ms": 14.45,
+    "p9999_ms": 14.45,
+    "cpu_per_1k": 110.07,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+1432 µs P50 vs Baseline)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_control_interleaved_mixed_rps100_mean_n5",
+    "topology": "Unprotected Control",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.1,
+    "fpr": 0.0,
+    "tp_drop": 0.0,
+    "p50_ms": 2.2,
+    "p90_ms": 7.53,
+    "p95_ms": 7.83,
+    "p99_ms": 8.07,
+    "p999_ms": 8.39,
+    "p9999_ms": 8.39,
+    "cpu_per_1k": 15.97,
+    "rss_mb": 46.22,
+    "survival": "Degraded (37 Backend Runtime Faults)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_baseline_interleaved_mixed_rps100_mean_n5",
+    "topology": "Proxy Baseline",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.1,
+    "fpr": 0.0,
+    "tp_drop": 0.0,
+    "p50_ms": 3.14,
+    "p90_ms": 9.65,
+    "p95_ms": 9.93,
+    "p99_ms": 10.27,
+    "p999_ms": 10.76,
+    "p9999_ms": 10.76,
+    "cpu_per_1k": 44.53,
+    "rss_mb": 134.91,
+    "survival": "Degraded (37 Backend Runtime Faults)",
+    "trials_merged": 5
+  },
+  {
+    "label": "homelab_prod_interleaved_mixed_rps100_mean_n5",
+    "topology": "Custos Production",
+    "regime": "interleaved",
+    "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
+    "rps": 100,
+    "achieved_rps": 100.1,
+    "fpr": 0.0,
+    "tp_drop": 1.0,
+    "p50_ms": 4.61,
+    "p90_ms": 12.96,
+    "p95_ms": 13.27,
+    "p99_ms": 13.65,
+    "p999_ms": 15.09,
+    "p9999_ms": 15.09,
+    "cpu_per_1k": 76.19,
+    "rss_mb": 201.87,
+    "survival": "100% Protected (33/33 Exploits Dropped)",
     "trials_merged": 5
   },
   {
@@ -942,18 +1122,18 @@ const REFERENCE_TRIALS = [
     "regime": "interleaved",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 150,
-    "achieved_rps": 150.2,
+    "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 1.95,
-    "p90_ms": 7.39,
-    "p95_ms": 7.64,
-    "p99_ms": 8.08,
-    "p999_ms": 8.79,
-    "p9999_ms": 8.79,
-    "cpu_per_1k": 91.2,
-    "rss_mb": 37.0,
-    "survival": "Degraded (7 Backend Runtime Faults)",
+    "p50_ms": 1.99,
+    "p90_ms": 7.43,
+    "p95_ms": 7.68,
+    "p99_ms": 8.1,
+    "p999_ms": 8.73,
+    "p9999_ms": 8.73,
+    "cpu_per_1k": 15.95,
+    "rss_mb": 46.22,
+    "survival": "Degraded (56 Backend Runtime Faults)",
     "trials_merged": 5
   },
   {
@@ -962,18 +1142,18 @@ const REFERENCE_TRIALS = [
     "regime": "interleaved",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 150,
-    "achieved_rps": 150.1,
+    "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 3.09,
-    "p90_ms": 9.71,
-    "p95_ms": 10.04,
-    "p99_ms": 10.56,
-    "p999_ms": 10.94,
-    "p9999_ms": 10.94,
-    "cpu_per_1k": 145.2,
-    "rss_mb": 103.8,
-    "survival": "Degraded (7 Backend Runtime Faults)",
+    "p50_ms": 3.35,
+    "p90_ms": 10.07,
+    "p95_ms": 10.4,
+    "p99_ms": 10.9,
+    "p999_ms": 11.47,
+    "p9999_ms": 11.47,
+    "cpu_per_1k": 42.96,
+    "rss_mb": 134.91,
+    "survival": "Degraded (56 Backend Runtime Faults)",
     "trials_merged": 5
   },
   {
@@ -982,18 +1162,18 @@ const REFERENCE_TRIALS = [
     "regime": "interleaved",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 150,
-    "achieved_rps": 150.0,
+    "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 5.05,
-    "p90_ms": 12.73,
-    "p95_ms": 13.13,
-    "p99_ms": 13.82,
-    "p999_ms": 14.47,
-    "p9999_ms": 14.47,
-    "cpu_per_1k": 101.87,
-    "rss_mb": 108.5,
-    "survival": "100% Protected (22/22 Exploits Dropped)",
+    "p50_ms": 5.45,
+    "p90_ms": 13.34,
+    "p95_ms": 13.67,
+    "p99_ms": 14.11,
+    "p999_ms": 15.67,
+    "p9999_ms": 15.67,
+    "cpu_per_1k": 72.97,
+    "rss_mb": 201.87,
+    "survival": "100% Protected (33/33 Exploits Dropped)",
     "trials_merged": 5
   },
   {
@@ -1002,18 +1182,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 915.0,
+    "achieved_rps": 915.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 308.65,
-    "p90_ms": 512.18,
-    "p95_ms": 512.28,
-    "p99_ms": 512.28,
-    "p999_ms": 512.28,
-    "p9999_ms": 512.28,
-    "cpu_per_1k": 136.8,
-    "rss_mb": 37.0,
-    "survival": "Backend Flooded (Benign P99 512.3 ms)",
+    "p50_ms": 308.96,
+    "p90_ms": 511.18,
+    "p95_ms": 511.18,
+    "p99_ms": 511.34,
+    "p999_ms": 511.34,
+    "p9999_ms": 511.34,
+    "cpu_per_1k": 37.09,
+    "rss_mb": 46.22,
+    "survival": "Backend Flooded (Benign P99 511.3 ms)",
     "trials_merged": 5
   },
   {
@@ -1022,18 +1202,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 902.6,
+    "achieved_rps": 912.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 338.27,
-    "p90_ms": 523.76,
-    "p95_ms": 524.45,
-    "p99_ms": 524.5,
-    "p999_ms": 524.5,
-    "p9999_ms": 524.5,
-    "cpu_per_1k": 217.8,
-    "rss_mb": 103.8,
-    "survival": "Backend Flooded (Benign P99 524.5 ms)",
+    "p50_ms": 323.12,
+    "p90_ms": 516.84,
+    "p95_ms": 517.94,
+    "p99_ms": 518.0,
+    "p999_ms": 518.0,
+    "p9999_ms": 518.0,
+    "cpu_per_1k": 81.99,
+    "rss_mb": 134.91,
+    "survival": "Backend Flooded (Benign P99 518.0 ms)",
     "trials_merged": 5
   },
   {
@@ -1042,18 +1222,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 2458.8,
+    "achieved_rps": 3275.4,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 150.84,
-    "p90_ms": 202.19,
-    "p95_ms": 203.21,
-    "p99_ms": 203.29,
-    "p999_ms": 203.29,
-    "p9999_ms": 203.29,
-    "cpu_per_1k": 152.8,
-    "rss_mb": 108.5,
-    "survival": "100% Benign Survival (Benign P99 203.3 ms)",
+    "p50_ms": 102.64,
+    "p90_ms": 150.92,
+    "p95_ms": 152.99,
+    "p99_ms": 153.01,
+    "p999_ms": 153.01,
+    "p9999_ms": 153.01,
+    "cpu_per_1k": 182.14,
+    "rss_mb": 201.87,
+    "survival": "100% Benign Survival (250/250 OK, Benign P99 153.0 ms)",
     "trials_merged": 5
   }
 ];
@@ -1426,12 +1606,16 @@ function renderTrialsTable(trials) {
             ? "var(--ctp-green)"
             : "var(--ctp-subtext0)";
         const profile = t.benign_profile || "ResNet-50 B=1 (FP32)";
+        const rateLabel =
+          t.regime === "saturating-burst"
+            ? `${t.achieved_rps.toFixed(1)} (C=${t.rps} fan-out)`
+            : `${t.achieved_rps.toFixed(1)} / ${t.rps}`;
         return `
     <tr>
       <td class="mono" style="font-weight:600">${t.topology}</td>
       <td><span class="badge badge-mauve">${t.regime}</span></td>
       <td class="mono" style="font-size:0.78rem; color:var(--ctp-subtext1)">${profile}</td>
-      <td class="mono">${t.achieved_rps.toFixed(1)} / ${t.rps}</td>
+      <td class="mono">${rateLabel}</td>
       <td class="mono">${t.p50_ms.toFixed(2)} ms</td>
       <td class="mono">${t.p99_ms.toFixed(2)} ms</td>
       <td class="mono">${t.p9999_ms.toFixed(2)} ms</td>
