@@ -1502,6 +1502,43 @@ code {
   font-size: 0.78rem;
   color: var(--ctp-subtext0);
   margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 500;
+  color: var(--ctp-subtext1);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.is-control {
+  background: var(--ctp-red);
+}
+
+.legend-dot.is-baseline {
+  background: var(--ctp-blue);
+}
+
+.legend-dot.is-custos {
+  background: var(--ctp-green);
+}
+
+.chart-hint {
+  font-size: 0.72rem;
+  color: var(--ctp-overlay1);
+  margin-left: auto;
 }
 
 .svg-chart {
@@ -1515,16 +1552,121 @@ code {
 .svg-chart polyline {
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: opacity var(--t-fast), stroke-width var(--t-fast);
+}
+
+.svg-chart .chart-series {
+  cursor: pointer;
+  transition: opacity var(--t-fast);
+}
+
+.svg-chart.is-hovering .chart-series:not(.is-active) {
+  opacity: 0.16;
+}
+
+.svg-chart .chart-series.is-active polyline {
+  stroke-width: 3.6;
+}
+
+.svg-chart .chart-dot {
+  cursor: pointer;
+  transition: r var(--t-fast), stroke-width var(--t-fast), filter var(--t-fast);
+}
+
+.svg-chart .chart-dot.is-active {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.svg-chart .chart-bar-group {
+  cursor: pointer;
+  transition: opacity var(--t-fast);
+}
+
+.svg-chart.is-hovering .chart-bar-group:not(.is-active) {
+  opacity: 0.24;
 }
 
 .svg-chart rect {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  transition: opacity var(--t-fast);
+  transition: opacity var(--t-fast), filter var(--t-fast), stroke-width var(--t-fast);
 }
 
-.svg-chart rect:hover {
-  opacity: 0.78;
+.svg-chart .chart-bar-group.is-active rect {
+  filter: brightness(1.12);
+  stroke: var(--ctp-text);
+  stroke-width: 1.5;
+}
+
+/* Floating Chart Hover Tag Tooltip */
+.chart-tooltip {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  min-width: 250px;
+  max-width: 330px;
+  background: color-mix(in srgb, var(--ctp-crust) 95%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--ctp-surface2);
+  border-left: 4px solid var(--tooltip-accent, var(--ctp-mauve));
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.85rem;
+  box-shadow: var(--shadow-lifted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ctp-text);
+}
+
+.chart-tooltip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.chart-tooltip-arch {
+  font-weight: 700;
+  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-tooltip-tag {
+  font-size: 0.74rem;
+  color: var(--ctp-subtext1);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid var(--ctp-surface0);
+}
+
+.chart-tooltip-primary {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--tooltip-accent, var(--ctp-text));
+  margin-bottom: 0.35rem;
+}
+
+.chart-tooltip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 0.65rem;
+  font-size: 0.73rem;
+  color: var(--ctp-subtext0);
+}
+
+.chart-tooltip-grid strong {
+  color: var(--ctp-text);
+}
+
+.chart-tooltip-verdict {
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--ctp-surface0);
+  font-size: 0.72rem;
+  color: var(--ctp-subtext1);
 }
 
 /* --- Data Tables ---------------------------------------------------------- */

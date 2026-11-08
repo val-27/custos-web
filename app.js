@@ -2823,22 +2823,107 @@ function renderDashboard() {
   emit("custos:dashboardrendered", { count: rows.length });
 }
 
+function getTopologyColor(topology, styles) {
+  if (topology.includes("Custos") || topology.includes("Production")) {
+    return styles.getPropertyValue("--ctp-green").trim();
+  }
+  if (topology.includes("Baseline") || topology.includes("Envoy")) {
+    return styles.getPropertyValue("--ctp-blue").trim();
+  }
+  return styles.getPropertyValue("--ctp-red").trim();
+}
+
+function getShortProfileTag(trial) {
+  const prof = trial.benign_profile || "ResNet-50 B=1 (FP32)";
+  const shortProf = prof.includes("BYTES Tensor")
+    ? "BYTES [1,2]"
+    : prof.includes("Mixed")
+      ? "Mixed"
+      : "FP32 B=1";
+  if (trial.regime === "saturating-burst") {
+    return `${shortProf} • C=${trial.rps}`;
+  }
+  return `${shortProf} • ${trial.rps} RPS`;
+}
+
+function showChartTooltip(evt, trial, color, primaryLabel, primaryValue) {
+  const tip = document.getElementById("chart-tooltip");
+  if (!tip) return;
+  const profile = trial.benign_profile || "ResNet-50 B=1 (FP32)";
+  const rateDesc =
+    trial.regime === "saturating-burst"
+      ? `${trial.achieved_rps.toFixed(1)} RPS (C=${trial.rps} fan-out)`
+      : `${trial.achieved_rps.toFixed(1)} / ${trial.rps} RPS`;
+  const tpDropStr =
+    trial.regime === "steady-benign" || trial.tp_drop === null || trial.tp_drop === undefined
+      ? "N/A (Benign Only)"
+      : `${(Number(trial.tp_drop) * 100).toFixed(1)}%`;
+
+  tip.style.setProperty("--tooltip-accent", color);
+  tip.innerHTML = `
+    <div class="chart-tooltip-head">
+      <span class="chart-tooltip-arch">
+        <span class="legend-dot" style="background:${color}"></span>
+        ${trial.topology}
+      </span>
+      <span class="badge badge-mauve" style="font-size:0.68rem; padding:0.12rem 0.45rem">${trial.regime}</span>
+    </div>
+    <div class="chart-tooltip-tag mono">
+      ${profile} • ${rateDesc}
+    </div>
+    <div class="chart-tooltip-primary mono">
+      ${primaryLabel}: ${primaryValue}
+    </div>
+    <div class="chart-tooltip-grid mono">
+      <span>P50: <strong>${trial.p50_ms.toFixed(2)} ms</strong></span>
+      <span>P95: <strong>${(trial.p95_ms || trial.p90_ms).toFixed(2)} ms</strong></span>
+      <span>P99: <strong>${trial.p99_ms.toFixed(2)} ms</strong></span>
+      <span>P99.99: <strong>${trial.p9999_ms.toFixed(2)} ms</strong></span>
+      <span>TP Drop: <strong>${tpDropStr}</strong></span>
+      <span>Peak RSS: <strong>${trial.rss_mb.toFixed(1)} MiB</strong></span>
+    </div>
+    <div class="chart-tooltip-verdict">
+      ${trial.survival}
+    </div>
+  `;
+  tip.hidden = false;
+  moveChartTooltip(evt);
+}
+
+function moveChartTooltip(evt) {
+  const tip = document.getElementById("chart-tooltip");
+  if (!tip || tip.hidden) return;
+  const offset = 14;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const rect = tip.getBoundingClientRect();
+  let x = evt.clientX + offset;
+  let y = evt.clientY + offset;
+  if (x + rect.width + 12 > vw) {
+    x = Math.max(12, evt.clientX - rect.width - offset);
+  }
+  if (y + rect.height + 12 > vh) {
+    y = Math.max(12, evt.clientY - rect.height - offset);
+  }
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+}
+
+function hideChartTooltip() {
+  const tip = document.getElementById("chart-tooltip");
+  if (tip) tip.hidden = true;
+}
+
 function renderLatencySvg(trials) {
   const svg = document.getElementById("latency-svg");
   const styles = getComputedStyle(document.documentElement);
-  const colors = [
-    styles.getPropertyValue("--ctp-green").trim(),
-    styles.getPropertyValue("--ctp-blue").trim(),
-    styles.getPropertyValue("--ctp-red").trim(),
-    styles.getPropertyValue("--ctp-mauve").trim()
-  ];
   const gridColor = styles.getPropertyValue("--ctp-surface0").trim();
   const textColor = styles.getPropertyValue("--ctp-subtext0").trim();
 
   const keys = ["p50_ms", "p90_ms", "p95_ms", "p99_ms", "p999_ms", "p9999_ms"];
   const labels = ["P50", "P90", "P95", "P99", "P99.9", "P99.99"];
   const W = 540;
-  const H = 240;
+  const H = 250;
   const padL = 54;
   const padR = 24;
   const padT = 20;
@@ -2865,43 +2950,102 @@ function renderLatencySvg(trials) {
 
   labels.forEach((lbl, i) => {
     const x = xFor(i);
-    out += `<text x="${x}" y="${H - 10}" fill="${textColor}" font-size="10" text-anchor="middle">${lbl}</text>`;
+    out += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H - padB}" stroke="${gridColor}" stroke-opacity="0.45" />`;
+    out += `<text x="${x}" y="${H - 10}" fill="${textColor}" font-size="10" font-weight="600" text-anchor="middle">${lbl}</text>`;
   });
 
   trials.forEach((t, idx) => {
-    const color =
-      t.topology.includes("Custos") || t.topology.includes("Production")
-        ? colors[0]
-        : t.topology.includes("Baseline") || t.topology.includes("Envoy")
-          ? colors[1]
-          : colors[2 + (idx % 2)];
+    const color = getTopologyColor(t.topology, styles);
     const pts = keys.map((k, i) => `${xFor(i)},${yFor(t[k] || 0.1)}`).join(" ");
-    out += `<polyline fill="none" stroke="${color}" stroke-width="2.5" points="${pts}" />`;
+    out += `<g class="chart-series" data-series-idx="${idx}">`;
+    out += `<polyline fill="none" stroke="${color}" stroke-width="2.4" points="${pts}" />`;
     keys.forEach((k, i) => {
-      out += `<circle cx="${xFor(i)}" cy="${yFor(t[k] || 0.1)}" r="3.5" fill="${color}" />`;
+      const val = t[k] || 0.1;
+      out += `<circle class="chart-dot" data-series-idx="${idx}" data-pct-idx="${i}" cx="${xFor(i)}" cy="${yFor(val)}" r="4.5" fill="${color}" stroke="var(--ctp-mantle)" stroke-width="1.5" />`;
     });
+    out += `</g>`;
   });
 
   svg.innerHTML = out;
+
+  const seriesGroups = svg.querySelectorAll(".chart-series");
+  seriesGroups.forEach((group) => {
+    const idx = Number(group.dataset.seriesIdx);
+    const trial = trials[idx];
+    const color = getTopologyColor(trial.topology, styles);
+
+    group.addEventListener("mouseenter", (evt) => {
+      svg.classList.add("is-hovering");
+      seriesGroups.forEach((g) => g.classList.toggle("is-active", g === group));
+      showChartTooltip(
+        evt,
+        trial,
+        color,
+        `${getShortProfileTag(trial)} (P99)`,
+        `${trial.p99_ms.toFixed(2)} ms`
+      );
+    });
+
+    group.addEventListener("mousemove", (evt) => {
+      moveChartTooltip(evt);
+    });
+
+    group.addEventListener("mouseleave", () => {
+      group.classList.remove("is-active");
+      svg.classList.remove("is-hovering");
+      hideChartTooltip();
+    });
+  });
+
+  svg.querySelectorAll(".chart-dot").forEach((dot) => {
+    const idx = Number(dot.dataset.seriesIdx);
+    const pctIdx = Number(dot.dataset.pctIdx);
+    const trial = trials[idx];
+    const color = getTopologyColor(trial.topology, styles);
+    const pctLabel = labels[pctIdx];
+    const pctVal = trial[keys[pctIdx]] || 0;
+
+    dot.addEventListener("mouseenter", (evt) => {
+      evt.stopPropagation();
+      svg.classList.add("is-hovering");
+      seriesGroups.forEach((g) => g.classList.toggle("is-active", Number(g.dataset.seriesIdx) === idx));
+      dot.classList.add("is-active");
+      dot.setAttribute("r", "6.5");
+      showChartTooltip(
+        evt,
+        trial,
+        color,
+        `${pctLabel} Latency (${getShortProfileTag(trial)})`,
+        `${pctVal.toFixed(2)} ms`
+      );
+    });
+
+    dot.addEventListener("mousemove", (evt) => {
+      evt.stopPropagation();
+      moveChartTooltip(evt);
+    });
+
+    dot.addEventListener("mouseleave", () => {
+      dot.classList.remove("is-active");
+      dot.setAttribute("r", "4.5");
+    });
+  });
 }
 
 function renderThroughputSvg(trials) {
   const svg = document.getElementById("throughput-svg");
   const styles = getComputedStyle(document.documentElement);
-  const green = styles.getPropertyValue("--ctp-green").trim();
-  const blue = styles.getPropertyValue("--ctp-blue").trim();
-  const red = styles.getPropertyValue("--ctp-red").trim();
   const gridColor = styles.getPropertyValue("--ctp-surface0").trim();
   const textColor = styles.getPropertyValue("--ctp-subtext0").trim();
 
   const W = 540;
-  const H = 280;
+  const H = 250;
   const padL = 52;
   const padR = 20;
-  const padT = 24;
-  const padB = 80;
+  const padT = 22;
+  const padB = 46;
 
-  const maxRps = Math.max(...trials.map((t) => Math.max(t.rps, t.achieved_rps, 1000)), 1000) * 1.1;
+  const maxRps = Math.max(...trials.map((t) => Math.max(t.rps, t.achieved_rps, 200)), 200) * 1.12;
   let out = "";
 
   for (let i = 0; i <= 4; i++) {
@@ -2912,41 +3056,73 @@ function renderThroughputSvg(trials) {
   }
 
   const slotW = (W - padL - padR) / Math.max(trials.length, 1);
-  const barW = Math.min(48, slotW * 0.55);
+  const barW = Math.min(38, Math.max(slotW * 0.64, 6));
+  const showValueLabels = trials.length <= 6;
+
+  // Draw subtle vertical dividers and one shared x-axis group tag per 3-bar triad
+  const triadCount = Math.floor(trials.length / 3);
+  if (triadCount >= 1 && trials.length % 3 === 0) {
+    for (let g = 0; g < triadCount; g++) {
+      const firstInTriad = trials[g * 3];
+      const triadCenter = padL + slotW * (g * 3 + 1.5);
+      if (g > 0) {
+        const divX = padL + slotW * (g * 3);
+        out += `<line x1="${divX}" y1="${padT}" x2="${divX}" y2="${H - padB + 6}" stroke="${gridColor}" stroke-opacity="0.7" />`;
+      }
+      const tagText = getShortProfileTag(firstInTriad);
+      const fontSize = triadCount > 4 ? 8 : 9.5;
+      out += `<text x="${triadCenter}" y="${H - 18}" fill="${textColor}" font-size="${fontSize}" font-weight="600" text-anchor="middle">${tagText}</text>`;
+    }
+  }
 
   trials.forEach((t, idx) => {
     const cx = padL + slotW * (idx + 0.5);
     const h = (t.achieved_rps / maxRps) * (H - padT - padB);
     const y = H - padB - h;
-    const color =
-      t.topology.includes("Custos") || t.topology.includes("Production")
-        ? green
-        : t.topology.includes("Baseline") || t.topology.includes("Envoy")
-          ? blue
-          : red;
+    const color = getTopologyColor(t.topology, styles);
 
-    const dense = trials.length > 6;
-    const valText = dense ? `${t.achieved_rps.toFixed(0)}` : `${t.achieved_rps.toFixed(0)} rps`;
-    out += `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${Math.max(h, 2)}" rx="4" fill="${color}" />`;
-    out += `<text x="${cx}" y="${y - 6}" fill="${textColor}" font-size="${dense ? 8 : 10}" text-anchor="middle">${valText}</text>`;
-    const topology =
-      t.topology.includes("Custos")
-        ? dense ? "Prod" : "Production"
-        : t.topology.includes("Baseline")
-          ? dense ? "Base" : "Baseline"
-          : dense ? "Ctrl" : "Control";
-    const profShort =
-      (t.benign_profile || "").includes("BYTES Tensor")
-        ? "BYTES"
-        : (t.benign_profile || "").includes("Mixed")
-          ? "Mixed"
-          : `FP32@${t.rps}`;
-    
-    out += `<text x="${cx}" y="${H - 54}" fill="${textColor}" font-size="${dense ? 7.5 : 9}" font-weight="600" text-anchor="middle">${topology}</text>`;
-    out += `<text x="${cx}" y="${H - 42}" fill="${textColor}" font-size="${dense ? 7 : 8.5}" text-anchor="middle">${profShort}</text>`;
+    out += `<g class="chart-bar-group" data-series-idx="${idx}">`;
+    out += `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${Math.max(h, 3)}" rx="4" fill="${color}" />`;
+    if (showValueLabels) {
+      out += `<text x="${cx}" y="${y - 6}" fill="${textColor}" font-size="9.5" font-weight="600" text-anchor="middle">${t.achieved_rps.toFixed(0)} rps</text>`;
+    }
+    out += `</g>`;
   });
 
   svg.innerHTML = out;
+
+  const barGroups = svg.querySelectorAll(".chart-bar-group");
+  barGroups.forEach((group) => {
+    const idx = Number(group.dataset.seriesIdx);
+    const trial = trials[idx];
+    const color = getTopologyColor(trial.topology, styles);
+    const rateLabel =
+      trial.regime === "saturating-burst"
+        ? `${trial.achieved_rps.toFixed(1)} RPS (C=${trial.rps} fan-out)`
+        : `${trial.achieved_rps.toFixed(1)} / ${trial.rps} RPS`;
+
+    group.addEventListener("mouseenter", (evt) => {
+      svg.classList.add("is-hovering");
+      barGroups.forEach((g) => g.classList.toggle("is-active", g === group));
+      showChartTooltip(
+        evt,
+        trial,
+        color,
+        `Achieved Goodput (${getShortProfileTag(trial)})`,
+        rateLabel
+      );
+    });
+
+    group.addEventListener("mousemove", (evt) => {
+      moveChartTooltip(evt);
+    });
+
+    group.addEventListener("mouseleave", () => {
+      group.classList.remove("is-active");
+      svg.classList.remove("is-hovering");
+      hideChartTooltip();
+    });
+  });
 }
 
 function renderTrialsTable(trials) {

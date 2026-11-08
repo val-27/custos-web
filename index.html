@@ -429,16 +429,27 @@
       <div class="grid-2" style="margin-bottom: 1.5rem;">
         <div class="chart-box reveal">
           <h4>Coordinated-Omission Latency CDF (P50 – P99.99, Log Scale)</h4>
-          <div class="chart-sub">Comparing Unprotected Control (Red), Proxy Baseline (Blue), and Custos Production (Green)</div>
-          <svg id="latency-svg" class="svg-chart" viewBox="0 0 540 240" preserveAspectRatio="none"></svg>
+          <div class="chart-sub">
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Unprotected Control</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy Baseline</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos Production</span>
+            <span class="chart-hint mono">• Hover any dot for tag</span>
+          </div>
+          <svg id="latency-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
 
         <div class="chart-box reveal">
           <h4>Achieved Goodput (Requests / sec)</h4>
-          <div class="chart-sub">Sustained RPC completion rate under offered load</div>
-          <svg id="throughput-svg" class="svg-chart" viewBox="0 0 540 280" preserveAspectRatio="none"></svg>
+          <div class="chart-sub">
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Control</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Baseline</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos</span>
+            <span class="chart-hint mono">• Hover any bar for tag</span>
+          </div>
+          <svg id="throughput-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
       </div>
+      <div id="chart-tooltip" class="chart-tooltip" role="status" aria-live="polite" hidden></div>
 
       <div class="table-wrap reveal">
         <table>
