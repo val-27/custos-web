@@ -2914,6 +2914,45 @@ function hideChartTooltip() {
   if (tip) tip.hidden = true;
 }
 
+function setActiveChartSeries(activeIdx) {
+  const latencySvg = document.getElementById("latency-svg");
+  const throughputSvg = document.getElementById("throughput-svg");
+  const isHover = activeIdx !== null && activeIdx !== undefined;
+
+  if (latencySvg) {
+    latencySvg.classList.toggle("is-hovering", isHover);
+    latencySvg.querySelectorAll(".chart-series").forEach((g) => {
+      const match = isHover && Number(g.dataset.seriesIdx) === activeIdx;
+      g.classList.toggle("is-active", match);
+      g.querySelectorAll(".chart-dot").forEach((d) => {
+        if (!d.classList.contains("is-active")) {
+          d.setAttribute("r", match ? "5.5" : "4.5");
+        }
+      });
+    });
+    if (!isHover) {
+      latencySvg.querySelectorAll(".chart-dot").forEach((d) => {
+        d.classList.remove("is-active");
+        d.setAttribute("r", "4.5");
+      });
+    }
+  }
+
+  if (throughputSvg) {
+    throughputSvg.classList.toggle("is-hovering", isHover);
+    throughputSvg.querySelectorAll(".chart-bar-group").forEach((g) => {
+      g.classList.toggle("is-active", isHover && Number(g.dataset.seriesIdx) === activeIdx);
+    });
+  }
+
+  const tbody = document.getElementById("trials-tbody");
+  if (tbody) {
+    tbody.querySelectorAll("tr[data-series-idx]").forEach((tr) => {
+      tr.classList.toggle("is-active-row", isHover && Number(tr.dataset.seriesIdx) === activeIdx);
+    });
+  }
+}
+
 function renderLatencySvg(trials) {
   const svg = document.getElementById("latency-svg");
   const styles = getComputedStyle(document.documentElement);
@@ -2975,8 +3014,7 @@ function renderLatencySvg(trials) {
     const color = getTopologyColor(trial.topology, styles);
 
     group.addEventListener("mouseenter", (evt) => {
-      svg.classList.add("is-hovering");
-      seriesGroups.forEach((g) => g.classList.toggle("is-active", g === group));
+      setActiveChartSeries(idx);
       showChartTooltip(
         evt,
         trial,
@@ -2991,8 +3029,7 @@ function renderLatencySvg(trials) {
     });
 
     group.addEventListener("mouseleave", () => {
-      group.classList.remove("is-active");
-      svg.classList.remove("is-hovering");
+      setActiveChartSeries(null);
       hideChartTooltip();
     });
   });
@@ -3007,8 +3044,7 @@ function renderLatencySvg(trials) {
 
     dot.addEventListener("mouseenter", (evt) => {
       evt.stopPropagation();
-      svg.classList.add("is-hovering");
-      seriesGroups.forEach((g) => g.classList.toggle("is-active", Number(g.dataset.seriesIdx) === idx));
+      setActiveChartSeries(idx);
       dot.classList.add("is-active");
       dot.setAttribute("r", "6.5");
       showChartTooltip(
@@ -3027,7 +3063,7 @@ function renderLatencySvg(trials) {
 
     dot.addEventListener("mouseleave", () => {
       dot.classList.remove("is-active");
-      dot.setAttribute("r", "4.5");
+      dot.setAttribute("r", "5.5");
     });
   });
 }
@@ -3102,8 +3138,7 @@ function renderThroughputSvg(trials) {
         : `${trial.achieved_rps.toFixed(1)} / ${trial.rps} RPS`;
 
     group.addEventListener("mouseenter", (evt) => {
-      svg.classList.add("is-hovering");
-      barGroups.forEach((g) => g.classList.toggle("is-active", g === group));
+      setActiveChartSeries(idx);
       showChartTooltip(
         evt,
         trial,
@@ -3118,8 +3153,7 @@ function renderThroughputSvg(trials) {
     });
 
     group.addEventListener("mouseleave", () => {
-      group.classList.remove("is-active");
-      svg.classList.remove("is-hovering");
+      setActiveChartSeries(null);
       hideChartTooltip();
     });
   });
@@ -3129,7 +3163,7 @@ function renderTrialsTable(trials) {
   const tbody = document.getElementById("trials-tbody");
   tbody.innerHTML = trials
     .map(
-      (t) => {
+      (t, idx) => {
         const isSteadyBenign = t.regime === "steady-benign" || t.tp_drop === null || t.tp_drop === undefined;
         const tpDropText = isSteadyBenign ? "N/A" : `${(Number(t.tp_drop) * 100).toFixed(1)}%`;
         const tpDropColor = isSteadyBenign
@@ -3143,7 +3177,7 @@ function renderTrialsTable(trials) {
             ? `${t.achieved_rps.toFixed(1)} (C=${t.rps} fan-out)`
             : `${t.achieved_rps.toFixed(1)} / ${t.rps}`;
         return `
-    <tr>
+    <tr data-series-idx="${idx}">
       <td class="mono" style="font-weight:600">${t.topology}</td>
       <td><span class="badge badge-mauve">${t.regime}</span></td>
       <td class="mono" style="font-size:0.78rem; color:var(--ctp-subtext1)">${profile}</td>
@@ -3162,6 +3196,12 @@ function renderTrialsTable(trials) {
       }
     )
     .join("");
+
+  tbody.querySelectorAll("tr[data-series-idx]").forEach((tr) => {
+    const idx = Number(tr.dataset.seriesIdx);
+    tr.addEventListener("mouseenter", () => setActiveChartSeries(idx));
+    tr.addEventListener("mouseleave", () => setActiveChartSeries(null));
+  });
 }
 
 // 5. ELI5 explainers on the threat taxonomy cards.

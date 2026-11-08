@@ -1561,11 +1561,17 @@ code {
 }
 
 .svg-chart.is-hovering .chart-series:not(.is-active) {
-  opacity: 0.16;
+  opacity: 0.14;
 }
 
 .svg-chart .chart-series.is-active polyline {
-  stroke-width: 3.6;
+  stroke-width: 3.8;
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.28));
+}
+
+.svg-chart .chart-series.is-active .chart-dot {
+  stroke: var(--ctp-text);
+  stroke-width: 2;
 }
 
 .svg-chart .chart-dot {
@@ -1583,7 +1589,7 @@ code {
 }
 
 .svg-chart.is-hovering .chart-bar-group:not(.is-active) {
-  opacity: 0.24;
+  opacity: 0.2;
 }
 
 .svg-chart rect {
@@ -1593,9 +1599,9 @@ code {
 }
 
 .svg-chart .chart-bar-group.is-active rect {
-  filter: brightness(1.12);
+  filter: brightness(1.14) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
   stroke: var(--ctp-text);
-  stroke-width: 1.5;
+  stroke-width: 1.75;
 }
 
 /* Floating Chart Hover Tag Tooltip */
@@ -1705,8 +1711,9 @@ tbody tr {
   transition: background-color var(--t-fast);
 }
 
-tbody tr:hover {
-  background: color-mix(in srgb, var(--ctp-surface0) 55%, transparent);
+tbody tr:hover,
+tbody tr.is-active-row {
+  background: color-mix(in srgb, var(--ctp-surface1) 65%, transparent);
 }
 
 tr:last-child td {
