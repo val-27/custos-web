@@ -460,6 +460,80 @@
           <tbody id="trials-tbody"></tbody>
         </table>
       </div>
+
+      <!-- 59-Payload Oracle Sweep Matrix -->
+      <div class="section-header reveal" style="margin-top: 3rem;">
+        <span class="section-tag mono">05 / Deterministic Corpus Verification (--regime oracle-sweep)</span>
+        <h3 class="section-title" style="font-size: 1.45rem;">59-Payload Oracle Sweep Matrix</h3>
+        <p class="section-desc">
+          Sequential verification of every entry in <code>corpus/manifest.json</code> across all three live LAN architectures: <strong>16</strong> benign payloads (<code>FP32</code> batches, <code>BYTES</code>, multi-chunk, inline <code>InferTensorContents</code>, zero-axis <code>[1,0,224,224]</code>, <code>BOOL</code>/<code>FP16</code>/<code>BF16</code>/<code>FP64</code>), <strong>2</strong> <code>MAX_DEPTH = 16</code> boundary-allow payloads, <strong>33</strong> adversarial &amp; oracle-reject <code>.pb</code> payloads, <strong>3</strong> HTTP/2 framing bodies (<code>h2c</code>), and <strong>5</strong> KServe v2 RPC method probes.
+        </p>
+      </div>
+
+      <div class="grid-3" style="margin-bottom: 1.25rem;">
+        <div class="card reveal">
+          <h3>
+            <span>Custos Production (:30803)</span>
+            <span class="badge badge-green">59 / 59 Matched</span>
+          </h3>
+          <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-green);">
+            ✓ 20 / 20 Allow Admitted (OK, 0% FPR)<br/>
+            ✓ 39 / 39 Reject Blocked (34 INVALID_ARGUMENT + 5 PERMISSION_DENIED)<br/>
+            ✓ 0 Backend INTERNAL Faults • 0 Mismatches
+          </p>
+        </div>
+        <div class="card reveal">
+          <h3>
+            <span>Proxy Baseline (:30802)</span>
+            <span class="badge badge-blue">20 / 59 Matched</span>
+          </h3>
+          <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
+            ✓ 20 / 20 Allow Admitted (OK)<br/>
+            ✕ 0 / 39 Reject Blocked (39 Mismatches)<br/>
+            ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
+          </p>
+        </div>
+        <div class="card reveal">
+          <h3>
+            <span>Unprotected Control (:30801)</span>
+            <span class="badge badge-red">20 / 59 Matched</span>
+          </h3>
+          <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
+            ✓ 20 / 20 Allow Admitted (OK)<br/>
+            ✕ 0 / 39 Reject Blocked (39 Mismatches)<br/>
+            ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
+          </p>
+        </div>
+      </div>
+
+      <div class="dashboard-controls reveal">
+        <div class="control-group">
+          <span class="control-label">Oracle Filter:</span>
+          <button class="tab-btn active" data-oracle-filter="all" type="button">All 59 Payloads (59/59 Match)</button>
+          <button class="tab-btn" data-oracle-filter="allow" type="button">Benign &amp; Boundary Allow (20/20 OK)</button>
+          <button class="tab-btn" data-oracle-filter="reject-pb" type="button">Protobuf &amp; Tensor Rejects (33/33 Dropped)</button>
+          <button class="tab-btn" data-oracle-filter="probes" type="button">HTTP/2 Framing &amp; RPC Probes (8/8 Enforced)</button>
+        </div>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th>Payload Name</th>
+              <th>Category</th>
+              <th>Framing &amp; RPC</th>
+              <th>Expected</th>
+              <th>Custos Production (:30803)</th>
+              <th>Custos Latency</th>
+              <th>Proxy Baseline (:30802)</th>
+              <th>Unprotected Control (:30801)</th>
+              <th>Wire &amp; Invariant Notes</th>
+            </tr>
+          </thead>
+          <tbody id="oracle-tbody"></tbody>
+        </table>
+      </div>
     </section>
   </main>
 

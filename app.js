@@ -131,6 +131,127 @@ const WIRE_PAYLOADS = [
     ]
   },
   {
+    id: "benign_contents_fp32_packed",
+    group: "Benign KServe v2 Traffic",
+    name: "benign_contents_fp32_packed (Inline TensorContents)",
+    badge: "ALLOW",
+    badgeClass: "badge-green",
+    category: "tensor_contents",
+    totalBytes: "87 B (framed)",
+    verdict: "ALLOW (ResponseStatus::Continue)",
+    httpStatus: "200 OK",
+    grpcStatus: "0 (OK)",
+    errorVariant: "None — Admitted (Inline InferTensorContents Verified)",
+    maxDepth: "2 / 16 (InputTensor -> TensorContents)",
+    tensorElements: "4 elements (16 B packed fp32_contents)",
+    skippedBytes: "42 B (O(1) cursor jump)",
+    summary:
+      "A valid KServe v2 request using inline InferTensorContents (Field 5 inside InferInputTensor) instead of Root Field 7 raw_input_contents. Contains 4 packed IEEE-754 floats (16 bytes) whose bit patterns include 0xFF/0x9B bytes. Custos enters MsgContext::TensorContents, verifies 16 % 4 == 0 (4 elements == shape [4]), and skips the packed float bytes in O(1).",
+    segments: [
+      {
+        kind: "grpc",
+        bytes: "00 00 00 00 52",
+        label: "gRPC Frame Header (5B)",
+        offset: "0x00..0x05",
+        detail: "Byte 0 = 0x00 (uncompressed). Bytes 1..4 = 0x00000052 (82 bytes big-endian)."
+      },
+      {
+        kind: "tag",
+        bytes: "2A 31 [0A 0C input_tensor  12 04 FP32  1A 01 04]",
+        label: "Field 5: InferInputTensor FP32 [4]",
+        offset: "0x24..0x3B",
+        detail: "Declares input_tensor with datatype = 'FP32' and packed shape = [4] (4 elements expected)."
+      },
+      {
+        kind: "skip",
+        bytes: "2A 12 [32 10 FF FF FF FF 9B 06 80 3F ... (16 B)]",
+        label: "InputTensor Field 5: packed fp32_contents (ALLOW)",
+        offset: "0x3B..0x4F",
+        detail:
+          "Tag 0x2A inside InputTensor pushes MsgContext::TensorContents. Field 6 (Tag 0x32, Wire Type 2, len 16) adds 16 / 4 = 4 elements to contents_elements and skips the float bytes in O(1) without misparsing 0xFF as Protobuf varints."
+      }
+    ]
+  },
+  {
+    id: "benign_shape_zero_axis",
+    group: "Benign KServe v2 Traffic",
+    name: "benign_shape_zero_axis (Zero-Length Axis [1, 0, 224, 224])",
+    badge: "ALLOW",
+    badgeClass: "badge-green",
+    category: "shape_axis",
+    totalBytes: "68 B (framed)",
+    verdict: "ALLOW (ResponseStatus::Continue)",
+    httpStatus: "200 OK",
+    grpcStatus: "0 (OK)",
+    errorVariant: "None — Admitted (0-Element Tensor Parity Verified)",
+    maxDepth: "1 / 16",
+    tensorElements: "0 / 16,777,216 (0 B expected)",
+    skippedBytes: "26 B",
+    summary:
+      "A valid KServe v2 tensor with a zero-length dimension ([1, 0, 224, 224]) and a corresponding 0-byte raw_input_contents[0] chunk (3A 00). Custos permits dim == 0 (while rejecting dim < 0), computes shape_product = 0, and verifies raw_chunks[0].len == 0.",
+    segments: [
+      {
+        kind: "grpc",
+        bytes: "00 00 00 00 3F",
+        label: "gRPC Frame Header (5B)",
+        offset: "0x00..0x05",
+        detail: "5-byte uncompressed gRPC frame header (63-byte body)."
+      },
+      {
+        kind: "shape",
+        bytes: "1A 06 01 00 E0 01 E0 01",
+        label: "Packed Shape [1, 0, 224, 224] -> 0 Elements",
+        offset: "0x39..0x41",
+        detail:
+          "accumulate_dimension() accepts non-negative dimensions (dim >= 0) using checked_mul. Product = 1 * 0 * 224 * 224 = 0 elements (0 bytes expected)."
+      },
+      {
+        kind: "skip",
+        bytes: "3A 00",
+        label: "Field 7: 0-Byte raw_input_contents[0] (ALLOW)",
+        offset: "0x41..0x43",
+        detail:
+          "Root Field 7 supplies a 0-byte chunk (raw_chunks[0].len == 0), matching input_specs[0] expected bytes (0)."
+      }
+    ]
+  },
+  {
+    id: "benign_mixed_fp32_bytes",
+    group: "Benign KServe v2 Traffic",
+    name: "benign_mixed_fp32_bytes (Multi-Input FP32 + BYTES)",
+    badge: "ALLOW",
+    badgeClass: "badge-green",
+    category: "bytes_prefix",
+    totalBytes: "118 B (framed)",
+    verdict: "ALLOW (ResponseStatus::Continue)",
+    httpStatus: "200 OK",
+    grpcStatus: "0 (OK)",
+    errorVariant: "None — Admitted (Per-Input Fixed + Variable Parity)",
+    maxDepth: "1 / 16",
+    tensorElements: "Input 0: 2 FP32 (8 B) • Input 1: 2 BYTES (16 B)",
+    skippedBytes: "66 B (O(1) cursor jump)",
+    summary:
+      "A multi-input KServe v2 request combining a fixed-width FP32 [2] tensor (8 bytes) and a variable-width BYTES [2] tensor (two 4-byte length-prefixed strings = 16 bytes). Custos validates each input_specs[i] against its own raw_chunks[i] independently.",
+    segments: [
+      {
+        kind: "tag",
+        bytes: "2A 15 [in0: FP32, shape [2]]  2A 17 [in1: BYTES, shape [2]]",
+        label: "Two InferInputTensors: FP32 [2] + BYTES [2]",
+        offset: "0x24..0x54",
+        detail:
+          "Records input_specs[0] = { FP32, shape_product: 2, expected: 8 B } and input_specs[1] = { BYTES, shape_product: 2 }."
+      },
+      {
+        kind: "skip",
+        bytes: "3A 08 [8 B FP32]  3A 10 [04 00 00 00 'abcd' 04 00 00 00 'efgh']",
+        label: "Field 7 Chunks 0 & 1 Match 1-to-1 (ALLOW)",
+        offset: "0x54..0x6E",
+        detail:
+          "raw_chunks[0].len == 8 matches input_specs[0], and verify_bytes_chunk(raw_chunks[1], 2) confirms two 4-byte strings cleanly partition the 16-byte chunk."
+      }
+    ]
+  },
+  {
     id: "grpc_compressed_flag_01",
     group: "Exploit Family 1: Nesting Bombs",
     name: "grpc_compressed_flag_01 (gzip Flag = 0x01)",
@@ -587,6 +708,176 @@ const WIRE_PAYLOADS = [
         offset: "0x46..0x75",
         detail:
           "Tag 0x22 (InputTensor Field 4: parameters map entry) pushes MsgContext::ParameterMapEntry (with InferParameter string_param = 3 / int64_param = 2). Inside it, Field 1 (Tag 0x0A) has key 'shared_memory_region'. Custos matches prefix 'shared_memory' and immediately aborts with ParseError::UnauthorizedSharedMemoryParameter."
+      }
+    ]
+  },
+  {
+    id: "chunk_swap_fp32",
+    group: "Exploit Family 5: Oracle Parity & Framing",
+    name: "chunk_swap_fp32 (Multi-Tensor Per-Chunk Swap)",
+    badge: "REJECT",
+    badgeClass: "badge-red",
+    category: "chunk_parity",
+    totalBytes: "97 B (framed)",
+    verdict: "DENY (ImmediateResponse)",
+    httpStatus: "400 Bad Request",
+    grpcStatus: "3 (INVALID_ARGUMENT)",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected: 16, actual: 4 }",
+    maxDepth: "1 / 16",
+    tensorElements: "Input 0: 4 FP32 (16 B) • Input 1: 1 FP32 (4 B)",
+    skippedBytes: "42 B",
+    summary:
+      "Declares two FP32 inputs: in0 with shape [4] (16 bytes) and in1 with shape [1] (4 bytes), but supplies raw_input_contents[0] = 4 bytes and raw_input_contents[1] = 16 bytes. A naive total-sum check (20 B == 20 B) would pass this message, causing Triton to bind a 4-byte buffer to a 16-byte input. Custos enforces 1-to-1 per-input parity (raw_chunks[i].len == input_specs[i].expected_bytes).",
+    segments: [
+      {
+        kind: "tag",
+        bytes: "2A 0F [in0: FP32, shape [4]]  2A 0F [in1: FP32, shape [1]]",
+        label: "Two Inputs: in0 Expects 16 B, in1 Expects 4 B",
+        offset: "0x24..0x46",
+        detail:
+          "input_specs[0] records expected = 16 B; input_specs[1] records expected = 4 B."
+      },
+      {
+        kind: "exploit",
+        bytes: "3A 04 [4 B chunk 0]  3A 10 [16 B chunk 1] (ABORT)",
+        label: "Swapped Field 7 Chunks [4 B, 16 B]",
+        offset: "0x46..0x5E",
+        detail:
+          "At i = 0, raw_chunks[0].len (4) != input_specs[0].expected_bytes (16). Custos immediately rejects with ParseError::PayloadSizeMismatch { expected_bytes: 16, actual_bytes: 4 }."
+      }
+    ]
+  },
+  {
+    id: "contents_fp32_unpacked_ceiling",
+    group: "Exploit Family 5: Oracle Parity & Framing",
+    name: "contents_fp32_unpacked_ceiling (64 MiB Inline Claim, 1 Float)",
+    badge: "REJECT",
+    badgeClass: "badge-red",
+    category: "tensor_contents",
+    totalBytes: "79 B (framed)",
+    verdict: "DENY (ImmediateResponse)",
+    httpStatus: "400 Bad Request",
+    grpcStatus: "3 (INVALID_ARGUMENT)",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected: 67108864, actual: 4 }",
+    maxDepth: "2 / 16 (InputTensor -> TensorContents)",
+    tensorElements: "16,777,216 declared vs 1 supplied",
+    skippedBytes: "26 B",
+    summary:
+      "Declares an FP32 tensor at the 16,777,216-element ceiling (64 MiB), omits Root Field 7 entirely, and supplies an inline InferTensorContents (Field 5) containing only a single 4-byte unpacked fp32_contents element (Wire Type 5). Custos counts inline TensorContents elements and rejects the 64 MiB vs 4 B mismatch.",
+    segments: [
+      {
+        kind: "shape",
+        bytes: "1A 04 80 80 80 08",
+        label: "Packed Shape [16,777,216] (64 MiB FP32)",
+        offset: "0x39..0x3F",
+        detail:
+          "Declares 16,777,216 FP32 elements (67,108,864 bytes expected)."
+      },
+      {
+        kind: "exploit",
+        bytes: "2A 05 [35 00 00 80 3F] (ABORT)",
+        label: "TensorContents: Only 1 Unpacked Float (4 B)",
+        offset: "0x3F..0x46",
+        detail:
+          "Inside MsgContext::TensorContents, Tag 0x35 (Field 6, Wire Type 5 fixed32) increments contents_elements to 1. On parity check, contents_elements (1) != shape_product (16,777,216) -> ParseError::PayloadSizeMismatch."
+      }
+    ]
+  },
+  {
+    id: "bytes_length_prefix_oversize",
+    group: "Exploit Family 5: Oracle Parity & Framing",
+    name: "bytes_length_prefix_oversize (u32 Prefix Over-Read)",
+    badge: "REJECT",
+    badgeClass: "badge-red",
+    category: "bytes_prefix",
+    totalBytes: "76 B (framed)",
+    verdict: "DENY (ImmediateResponse)",
+    httpStatus: "400 Bad Request",
+    grpcStatus: "3 (INVALID_ARGUMENT)",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected: 104, actual: 8 }",
+    maxDepth: "1 / 16",
+    tensorElements: "1 BYTES element (u32 len = 100 inside 8 B chunk)",
+    skippedBytes: "32 B",
+    summary:
+      "Declares a 1-element BYTES tensor and supplies an 8-byte raw_input_contents chunk (>= 4 * 1 minimum bytes), but sets the 4-byte little-endian u32 length prefix inside the chunk to 100 (0x64000000). Custos decodes each 4-byte prefix inside verify_bytes_chunk() and blocks the 100-byte over-read.",
+    segments: [
+      {
+        kind: "tag",
+        bytes: "2A 18 [0A 06 prompt  12 05 BYTES  1A 01 01]",
+        label: "InferInputTensor: BYTES [1]",
+        offset: "0x24..0x3E",
+        detail: "Declares 1 variable-length BYTES element."
+      },
+      {
+        kind: "exploit",
+        bytes: "3A 08 [64 00 00 00  'a' 'b' 'c' 'd'] (ABORT)",
+        label: "Field 7: u32 Prefix = 100 Inside 8 B Chunk",
+        offset: "0x3E..0x48",
+        detail:
+          "verify_bytes_chunk() reads little-endian u32 = 100 at offset 0. Required chunk size (4 + 100 = 104 B) exceeds actual chunk length (8 B) -> ParseError::PayloadSizeMismatch."
+      }
+    ]
+  },
+  {
+    id: "shape_packed_ones",
+    group: "Exploit Family 5: Oracle Parity & Framing",
+    name: "shape_packed_ones (100,000 Packed Unit Dimensions)",
+    badge: "REJECT",
+    badgeClass: "badge-red",
+    category: "shape_budget",
+    totalBytes: "100,065 B (framed)",
+    verdict: "DENY (ImmediateResponse)",
+    httpStatus: "400 Bad Request",
+    grpcStatus: "3 (INVALID_ARGUMENT)",
+    errorVariant: "ParseError::TagLimitExceeded { count: 1025, max: 1024 }",
+    maxDepth: "1 / 16",
+    tensorElements: "Product = 1 (100,000 dims of 1)",
+    skippedBytes: "26 B",
+    summary:
+      "Packs 100,000 dimensions of value 1 inside a single packed shape field (Tag 0x1A). Because 1^100000 == 1, the element product never exceeds max_tensor_elements. Custos counts each packed dimension varint toward max_tags_scanned (1,024) and aborts in microseconds at dimension #1,021.",
+    segments: [
+      {
+        kind: "grpc",
+        bytes: "00 00 01 86 DC",
+        label: "gRPC Header (100,060 B)",
+        offset: "0x00..0x05",
+        detail: "5-byte uncompressed gRPC frame header."
+      },
+      {
+        kind: "exploit",
+        bytes: "1A 90 8D 06 [01 01 01 ... x100,000 -> ABORT at #1,025]",
+        label: "Packed Shape Flood (Aborted at Tag/Varint #1,025)",
+        offset: "0x39..0x186E1",
+        detail:
+          "Inside (MsgContext::InputTensor, 3), every packed dimension varint increments report.tags_scanned. At tag #1,025, Custos aborts immediately with ParseError::TagLimitExceeded instead of scanning all 100,000 bytes."
+      }
+    ]
+  },
+  {
+    id: "rpc_system_shared_memory_register",
+    group: "Exploit Family 5: Oracle Parity & Framing",
+    name: "rpc_system_shared_memory_register (Admin RPC Path Block)",
+    badge: "REJECT",
+    badgeClass: "badge-red",
+    category: "rpc",
+    totalBytes: "5 B (framed)",
+    verdict: "DENY (ImmediateResponse at RequestHeaders)",
+    httpStatus: "403 Forbidden",
+    grpcStatus: "7 (PERMISSION_DENIED)",
+    errorVariant: "custos_denied:unauthorized_rpc_method",
+    maxDepth: "0 / 16 (Rejected at HTTP/2 Headers)",
+    tensorElements: "0 (Body Never Evaluated)",
+    skippedBytes: "0 B",
+    summary:
+      "Targets Triton's unauthenticated SystemSharedMemoryRegister management RPC (:path = /inference.GRPCInferenceService/SystemSharedMemoryRegister). Custos enforces a strict unary KServe v2 :path allowlist during the RequestHeaders phase and rejects the call with HTTP 403 Forbidden / gRPC PERMISSION_DENIED (7) before reading the request body.",
+    segments: [
+      {
+        kind: "exploit",
+        bytes: ":path = /inference.GRPCInferenceService/SystemSharedMemoryRegister",
+        label: "HTTP/2 RequestHeaders :path Check (ABORT -> 403 / gRPC 7)",
+        offset: "Headers",
+        detail:
+          "is_allowed_kserve_rpc_path() only admits ModelInfer, ServerLive, ServerReady, ModelReady, ModelMetadata, and ModelConfig. All shared-memory registration, model repository load/unload, and bi-di streaming RPCs are rejected with HTTP 403 / gRPC status 7 (PERMISSION_DENIED)."
       }
     ]
   }
@@ -1238,6 +1529,1071 @@ const REFERENCE_TRIALS = [
   }
 ];
 
+const ORACLE_SWEEP_ROWS = [
+  {
+    "name": "benign_b1",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 602170,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 8.85,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 7.77,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 6.31,
+    "notes": "resnet50 FP32 NCHW [1,3,224,224] source=synthetic tensor_bytes=602112"
+  },
+  {
+    "name": "benign_b2",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 1204282,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 17.23,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 14.25,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 11.25,
+    "notes": "resnet50 FP32 NCHW [2,3,224,224] source=synthetic tensor_bytes=1204224"
+  },
+  {
+    "name": "benign_b4",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 2408507,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 37.91,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 25.92,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 22.19,
+    "notes": "resnet50 FP32 NCHW [4,3,224,224] source=synthetic tensor_bytes=2408448"
+  },
+  {
+    "name": "benign_b8",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 4816955,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 64.71,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 48.27,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 43.38,
+    "notes": "resnet50 FP32 NCHW [8,3,224,224] source=synthetic tensor_bytes=4816896"
+  },
+  {
+    "name": "benign_b16",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 9633852,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 127.45,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 105.32,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 85.7,
+    "notes": "resnet50 FP32 NCHW [16,3,224,224] source=synthetic tensor_bytes=9633792"
+  },
+  {
+    "name": "benign_bytes_tensor",
+    "category": "benign",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 134,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.19,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.14,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.69,
+    "notes": "KServe v2 BYTES tensor [1,2] with length-prefixed strings (73 B raw_input_contents)"
+  },
+  {
+    "name": "nesting_depth_15",
+    "category": "nesting_bomb",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 42,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 1.95,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.23,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.56,
+    "notes": "field-5 length-delimited wrap depth=15; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_16",
+    "category": "nesting_bomb",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 44,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 1.96,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.3,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.66,
+    "notes": "field-5 length-delimited wrap depth=16; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_17",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 46,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.72,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.43,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.19,
+    "notes": "field-5 length-delimited wrap depth=17; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_20",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 52,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.51,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.5,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.09,
+    "notes": "field-5 length-delimited wrap depth=20; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_50",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 112,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.67,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.76,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.53,
+    "notes": "field-5 length-delimited wrap depth=50; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_100",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 249,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 2.03,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 36.58,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.41,
+    "notes": "field-5 length-delimited wrap depth=100; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_250",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 699,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.83,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.9,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.44,
+    "notes": "field-5 length-delimited wrap depth=250; boundary allow is D<=16"
+  },
+  {
+    "name": "nesting_depth_500",
+    "category": "nesting_bomb",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 1449,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.93,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 36.82,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.55,
+    "notes": "field-5 length-delimited wrap depth=500; boundary allow is D<=16"
+  },
+  {
+    "name": "shape_neg_packed",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 60,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.62,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.31,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.04,
+    "notes": "packed shape [1,3,-1,224]; -1 is the 10-byte two's-complement varint"
+  },
+  {
+    "name": "shape_neg_unpacked",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 62,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.31,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.23,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.51,
+    "notes": "unpacked shape [1,3,-1,224] via repeated tag 0x18"
+  },
+  {
+    "name": "shape_wrap_64bit_packed",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 57,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.15,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.35,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.4,
+    "notes": "packed shape [2, 2**62, 2] whose product is 0 mod 2**64"
+  },
+  {
+    "name": "shape_wrap_64bit_unpacked",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 58,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.15,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.13,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.44,
+    "notes": "unpacked shape [2, 2**62, 2]"
+  },
+  {
+    "name": "shape_oom_massive_packed",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 52,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.14,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.44,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.58,
+    "notes": "packed shape [1024,1024,1024] ~= 1.07e9 elements"
+  },
+  {
+    "name": "shape_oom_massive_unpacked",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 53,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.31,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 36.64,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.14,
+    "notes": "unpacked shape [1024,1024,1024]"
+  },
+  {
+    "name": "shape_reordered_tail",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 16440,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 2.01,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.73,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.63,
+    "notes": "16 KiB field 7 precedes malicious field 5 [1024,1024,1024]"
+  },
+  {
+    "name": "shape_buffer_mismatch_underread",
+    "category": "shape_overflow",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 118,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.46,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.35,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.56,
+    "notes": "KServe v2 shape-to-buffer parity mismatch: shape [4,3,224,224] FP32 (2,408,448 B expected) with 64 B raw_input_contents"
+  },
+  {
+    "name": "varint_unterminated_11",
+    "category": "malformed_varint",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 22,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.49,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.92,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.56,
+    "notes": "tag 0x08 followed by 11 bytes of 0xFF (MSB=1)"
+  },
+  {
+    "name": "varint_unterminated_64",
+    "category": "malformed_varint",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 75,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.6,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 37.04,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.29,
+    "notes": "tag 0x08 followed by 64 bytes of 0x80 (MSB=1)"
+  },
+  {
+    "name": "varint_10th_byte_overflow",
+    "category": "malformed_varint",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 21,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.65,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.2,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 36.91,
+    "notes": "tag 0x08, 9x 0xFF, terminating 0x7F with bits above a 64-bit shift"
+  },
+  {
+    "name": "varint_truncated_eof",
+    "category": "malformed_varint",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 14,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.6,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.46,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.12,
+    "notes": "tag 0x08 followed by 3 bytes of 0xFF and immediate EOF"
+  },
+  {
+    "name": "sgroup_wire_type_3_bomb",
+    "category": "wire_type_exploit",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 268,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.56,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.56,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.2,
+    "notes": "CVE-2024-7254-class: 64 nested Wire Type 3 (SGROUP) tags bypassing recursion counters"
+  },
+  {
+    "name": "unknown_field_ast_flood",
+    "category": "ast_flood",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 4510,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.68,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.52,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.72,
+    "notes": "CVE-2022-1941 / CVE-2021-22569-class: 1,500 shallow unknown tags at D=0 (> 1,024 tag limit)"
+  },
+  {
+    "name": "cve_2024_0088_shm_params_infer",
+    "category": "shm_param_injection",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 177,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.69,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.15,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.2,
+    "notes": "CVE-2024-0088: shared_memory_region/offset/byte_size injected inside ModelInfer parameters map"
+  },
+  {
+    "name": "grpc_compressed_flag_01",
+    "category": "compressed_frame",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 57,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.41,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.11,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 36.35,
+    "notes": "Compressed gRPC frame (flag=0x01 / gzip) concealing an OOM tensor payload from uncompressed wire inspection"
+  },
+  {
+    "name": "benign_multichunk_aligned",
+    "category": "chunk_parity",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 102,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.49,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.35,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.99,
+    "notes": "FP32 [4] then FP32 [1] with raw chunks of 16 then 4 bytes"
+  },
+  {
+    "name": "benign_contents_fp32_unpacked",
+    "category": "tensor_contents",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 86,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.48,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.38,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.79,
+    "notes": "FP32 [1,4] as four unpacked fp32_contents (field 6, wire type 5), no raw_input_contents"
+  },
+  {
+    "name": "benign_contents_fp32_packed",
+    "category": "tensor_contents",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 82,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.53,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.45,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.82,
+    "notes": "FP32 [1,4] as packed fp32_contents (field 6, wire type 2) holding float32 1,2,3,4, no raw_input_contents"
+  },
+  {
+    "name": "benign_mixed_fp32_bytes",
+    "category": "bytes_prefix",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 113,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.52,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.3,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.8,
+    "notes": "FP32 [1,4] raw of 16 bytes plus BYTES [1,2] with little-endian u32 prefixes"
+  },
+  {
+    "name": "benign_param_binary_data_size",
+    "category": "parameters",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 106,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.48,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.37,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.9,
+    "notes": "FP32 [1,4] with InferParameter key binary_data_size on int64_param field 2"
+  },
+  {
+    "name": "benign_shape_zero_axis",
+    "category": "shape_axis",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 63,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.44,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.24,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.99,
+    "notes": "FP32 [1,0,224,224] with an empty raw_input_contents. KServe allows a zero axis"
+  },
+  {
+    "name": "benign_dtype_bool",
+    "category": "datatype",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 58,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.58,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.37,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 1.07,
+    "notes": "BOOL [1,4] with a 4-byte raw chunk"
+  },
+  {
+    "name": "benign_dtype_fp16",
+    "category": "datatype",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 62,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.57,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.24,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 1.04,
+    "notes": "FP16 [1,4] with an 8-byte raw chunk"
+  },
+  {
+    "name": "benign_dtype_bf16",
+    "category": "datatype",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 62,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.55,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.22,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 1.06,
+    "notes": "BF16 [1,4] with an 8-byte raw chunk"
+  },
+  {
+    "name": "benign_dtype_fp64",
+    "category": "datatype",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 86,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.37,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.4,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.96,
+    "notes": "FP64 [1,4] with a 32-byte raw chunk"
+  },
+  {
+    "name": "chunk_swap_fp32",
+    "category": "chunk_parity",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 92,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.93,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.15,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.44,
+    "notes": "FP32 [4] bound to a 4-byte chunk and FP32 [1] bound to a 16-byte chunk"
+  },
+  {
+    "name": "chunk_omitted_fp32",
+    "category": "chunk_parity",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 93,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.91,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.32,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.39,
+    "notes": "Two tensors expecting 16 and 4 bytes, with a single 20-byte raw chunk"
+  },
+  {
+    "name": "chunk_swap_reordered",
+    "category": "chunk_parity",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 97,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 2.02,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.59,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.6,
+    "notes": "Swapped raw chunks written before the inputs. Binding is by index, not wire order"
+  },
+  {
+    "name": "contents_fp32_unpacked_short",
+    "category": "tensor_contents",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 89,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.91,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.5,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.34,
+    "notes": "FP32 [4,3,224,224] with four unpacked fp32 values and no raw_input_contents"
+  },
+  {
+    "name": "contents_fp32_unpacked_ceiling",
+    "category": "tensor_contents",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 74,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 2.12,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.37,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.17,
+    "notes": "FP32 [16777216] with one unpacked fp32 value and no raw_input_contents"
+  },
+  {
+    "name": "bytes_length_prefix_oversize",
+    "category": "bytes_prefix",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 71,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.72,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.1,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.1,
+    "notes": "BYTES [1] whose little-endian u32 length is 0xFFFFFFFF inside an 8-byte chunk"
+  },
+  {
+    "name": "bytes_masks_short_fp32",
+    "category": "bytes_prefix",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 97,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.9,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.35,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.17,
+    "notes": "FP32 [4] chunk of 4 bytes compensated by a 16-byte BYTES chunk"
+  },
+  {
+    "name": "shape_sum_four_ceilings",
+    "category": "shape_budget",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 126,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.92,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.5,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.59,
+    "notes": "Four FP32 [16777216] tensors and no raw chunks. Declared elements are 4 times the per-tensor ceiling"
+  },
+  {
+    "name": "shape_packed_ones",
+    "category": "shape_budget",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 100060,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 3.13,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 39.7,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 38.47,
+    "notes": "One packed shape of 100000 dimensions of 1 (product stays 1). latency_ns is the measurement against the 250 ms ext_proc deadline"
+  },
+  {
+    "name": "datatype_fp64_short_raw",
+    "category": "datatype",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 76,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 2.06,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.58,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.31,
+    "notes": "FP64 [1,4] with a 16-byte raw chunk (the FP32 length)"
+  },
+  {
+    "name": "datatype_unknown_width",
+    "category": "datatype",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 76,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.8,
+    "baseline_status": "INTERNAL",
+    "baseline_match": false,
+    "baseline_latency_ms": 38.23,
+    "control_status": "INTERNAL",
+    "control_match": false,
+    "control_latency_ms": 37.35,
+    "notes": "Datatype 'FP32 ' (trailing space) on shape [1,4] with a 16-byte raw chunk. Unknown width fails closed"
+  },
+  {
+    "name": "frame_single",
+    "category": "framing",
+    "expected": "allow",
+    "framing": "http-body",
+    "method": "ModelInfer",
+    "tx_bytes": 57,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 2.84,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 3.21,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 2.08,
+    "notes": "One uncompressed gRPC frame whose declared length equals the body. Sent as the HTTP body, not via tonic"
+  },
+  {
+    "name": "frame_two_concat",
+    "category": "framing",
+    "expected": "reject",
+    "framing": "http-body",
+    "method": "ModelInfer",
+    "tx_bytes": 114,
+    "prod_status": "INVALID_ARGUMENT",
+    "prod_match": true,
+    "prod_latency_ms": 1.94,
+    "baseline_status": "OK",
+    "baseline_match": false,
+    "baseline_latency_ms": 3.02,
+    "control_status": "OK",
+    "control_match": false,
+    "control_latency_ms": 1.36,
+    "notes": "Two complete frames concatenated in one HTTP body"
+  },
+  {
+    "name": "frame_stream_infer_two",
+    "category": "framing",
+    "expected": "reject",
+    "framing": "http-body",
+    "method": "ModelStreamInfer",
+    "tx_bytes": 114,
+    "prod_status": "PERMISSION_DENIED",
+    "prod_match": true,
+    "prod_latency_ms": 1.56,
+    "baseline_status": "OTHER",
+    "baseline_match": false,
+    "baseline_latency_ms": 2.55,
+    "control_status": "OTHER",
+    "control_match": false,
+    "control_latency_ms": 1.48,
+    "notes": "ModelStreamInfer is not on the RPC allowlist. The body is also two frames"
+  },
+  {
+    "name": "rpc_model_infer_empty",
+    "category": "rpc",
+    "expected": "allow",
+    "framing": "protobuf",
+    "method": "ModelInfer",
+    "tx_bytes": 0,
+    "prod_status": "OK",
+    "prod_match": true,
+    "prod_latency_ms": 1.81,
+    "baseline_status": "OK",
+    "baseline_match": true,
+    "baseline_latency_ms": 2.49,
+    "control_status": "OK",
+    "control_match": true,
+    "control_latency_ms": 0.83,
+    "notes": "Empty ModelInfer message. The framed body is a zero-length protobuf"
+  },
+  {
+    "name": "rpc_system_shared_memory_register",
+    "category": "rpc",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "SystemSharedMemoryRegister",
+    "tx_bytes": 0,
+    "prod_status": "PERMISSION_DENIED",
+    "prod_match": true,
+    "prod_latency_ms": 1.15,
+    "baseline_status": "OTHER",
+    "baseline_match": false,
+    "baseline_latency_ms": 1.88,
+    "control_status": "OTHER",
+    "control_match": false,
+    "control_latency_ms": 0.54,
+    "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403, and the body is not forwarded"
+  },
+  {
+    "name": "rpc_cuda_shared_memory_register",
+    "category": "rpc",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "CudaSharedMemoryRegister",
+    "tx_bytes": 0,
+    "prod_status": "PERMISSION_DENIED",
+    "prod_match": true,
+    "prod_latency_ms": 1.19,
+    "baseline_status": "OTHER",
+    "baseline_match": false,
+    "baseline_latency_ms": 1.77,
+    "control_status": "OTHER",
+    "control_match": false,
+    "control_latency_ms": 0.59,
+    "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
+  },
+  {
+    "name": "rpc_repository_model_load",
+    "category": "rpc",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "RepositoryModelLoad",
+    "tx_bytes": 0,
+    "prod_status": "PERMISSION_DENIED",
+    "prod_match": true,
+    "prod_latency_ms": 1.27,
+    "baseline_status": "OTHER",
+    "baseline_match": false,
+    "baseline_latency_ms": 1.61,
+    "control_status": "OTHER",
+    "control_match": false,
+    "control_latency_ms": 0.58,
+    "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
+  },
+  {
+    "name": "rpc_repository_model_unload",
+    "category": "rpc",
+    "expected": "reject",
+    "framing": "protobuf",
+    "method": "RepositoryModelUnload",
+    "tx_bytes": 0,
+    "prod_status": "PERMISSION_DENIED",
+    "prod_match": true,
+    "prod_latency_ms": 1.34,
+    "baseline_status": "OTHER",
+    "baseline_match": false,
+    "baseline_latency_ms": 1.65,
+    "control_status": "OTHER",
+    "control_match": false,
+    "control_latency_ms": 0.6,
+    "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
+  }
+];
+
 let activeRegimeFilter = "interleaved";
 
 // Lets motion-init.js animate freshly rendered DOM without coupling the two files.
@@ -1661,10 +3017,72 @@ function initEli5() {
   });
 }
 
+let activeOracleFilter = "all";
+
+function initOracleSweep() {
+  const tbody = document.getElementById("oracle-tbody");
+  if (!tbody || typeof ORACLE_SWEEP_ROWS === "undefined") return;
+  const filterBtns = document.querySelectorAll("[data-oracle-filter]");
+  filterBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filterBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeOracleFilter = btn.dataset.oracleFilter;
+      renderOracleTable();
+    });
+  });
+  renderOracleTable();
+}
+
+function formatOracleStatusBadge(status, matched) {
+  const color = matched ? "var(--ctp-green)" : "var(--ctp-red)";
+  const icon = matched ? "✓" : "✕";
+  return `<span class="mono" style="color:${color}; font-weight:600">${icon} ${status}</span>`;
+}
+
+function renderOracleTable() {
+  const tbody = document.getElementById("oracle-tbody");
+  if (!tbody || typeof ORACLE_SWEEP_ROWS === "undefined") return;
+
+  const filtered = ORACLE_SWEEP_ROWS.filter((row) => {
+    if (activeOracleFilter === "allow") return row.expected === "allow";
+    if (activeOracleFilter === "reject-pb") {
+      return row.expected === "reject" && row.category !== "framing" && row.category !== "rpc";
+    }
+    if (activeOracleFilter === "probes") {
+      return row.category === "framing" || row.category === "rpc";
+    }
+    return true;
+  });
+
+  tbody.innerHTML = filtered
+    .map((r) => {
+      const expBadge =
+        r.expected === "allow"
+          ? `<span class="badge badge-green">allow</span>`
+          : `<span class="badge badge-red">reject</span>`;
+      return `
+    <tr>
+      <td class="mono" style="font-weight:600">${r.name}</td>
+      <td><span class="badge badge-mauve">${r.category}</span></td>
+      <td class="mono" style="font-size:0.76rem; color:var(--ctp-subtext1)">${r.method} [${r.framing}]</td>
+      <td>${expBadge}</td>
+      <td>${formatOracleStatusBadge(r.prod_status, r.prod_match)}</td>
+      <td class="mono">${r.prod_latency_ms.toFixed(2)} ms</td>
+      <td>${formatOracleStatusBadge(r.baseline_status, r.baseline_match)}</td>
+      <td>${formatOracleStatusBadge(r.control_status, r.control_match)}</td>
+      <td style="font-size:0.78rem; color:var(--ctp-subtext0)">${r.notes}</td>
+    </tr>
+  `;
+    })
+    .join("");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   initWireInspector();
   initTopologies();
   initDashboard();
+  initOracleSweep();
   initEli5();
 });
