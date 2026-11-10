@@ -320,58 +320,190 @@
     <section id="wire-inspector" class="section">
       <div class="section-header reveal">
         <span class="section-tag mono">02 / Zero-Copy Wire Format Analysis</span>
-        <h2 class="section-title">Interactive KServe v2 Protobuf Wire Inspector</h2>
+        <h2 class="section-title">Interactive KServe v2 Builder &amp; Byte-Stream Anatomy</h2>
         <p class="section-desc">
-          Pick a test request below to see exactly what the message looks like when transmitted. Custos breaks down each message into pieces and checks them one at a time. Click any byte block to see what was checked and what the result was.
+          Build or load a live KServe v2 <code>ModelInferRequest</code> below to see why <code>custos-core</code> runs in constant time: it inspects only the compact Protobuf metadata headers (<code>Field 1..5</code>) and jumps over multi-megabyte tensor buffers (<code>Field 7</code>) in <strong>$O(1)$</strong> while enforcing strict 1-to-1 per-input byte parity.
         </p>
       </div>
 
-      <div class="inspector-shell reveal">
-        <aside id="payload-sidebar" class="payload-sidebar"></aside>
+      <div class="builder-shell reveal">
+        <!-- 1. Quick Preset Bar -->
+        <div class="preset-bar">
+          <span class="preset-bar-label mono">1. Quick Scenarios:</span>
+          <div id="builder-preset-btns" class="preset-btn-group">
+            <button class="preset-chip active" data-preset="valid-multichunk" type="button">
+              <span class="chip-dot is-allow"></span>
+              <span>Valid Multi-Chunk (FP32 [4] + FP32 [1])</span>
+            </button>
+            <button class="preset-chip" data-preset="chunk-swap" type="button">
+              <span class="chip-dot is-reject"></span>
+              <span>Chunk Swap Bypass ([16B, 4B] vs [4B, 16B])</span>
+            </button>
+            <button class="preset-chip" data-preset="resnet-batch" type="button">
+              <span class="chip-dot is-allow"></span>
+              <span>ResNet-50 Batch Scaling (B=1 to B=16, 9.63 MB)</span>
+            </button>
+            <button class="preset-chip" data-preset="shape-wrap" type="button">
+              <span class="chip-dot is-reject"></span>
+              <span>64-Bit Shape Wrap ([2, 2^62, 2])</span>
+            </button>
+            <button class="preset-chip" data-preset="cve-2024-0088" type="button">
+              <span class="chip-dot is-reject"></span>
+              <span>CVE-2024-0088 Shared-Memory Param Injection</span>
+            </button>
+          </div>
+        </div>
 
-        <div class="inspector-main">
-          <div class="inspector-top">
+        <!-- Optional Batch Quick-Selector when testing ResNet-50 Batch Scaling -->
+        <div id="batch-scale-bar" class="batch-scale-bar">
+          <span class="mono batch-scale-label">ResNet-50 Batch Size (<code>[B, 3, 224, 224]</code> FP32):</span>
+          <div class="batch-btn-group">
+            <button class="batch-btn" data-batch="1" type="button">B=1 (602 KB)</button>
+            <button class="batch-btn" data-batch="2" type="button">B=2 (1.20 MB)</button>
+            <button class="batch-btn" data-batch="4" type="button">B=4 (2.41 MB)</button>
+            <button class="batch-btn" data-batch="8" type="button">B=8 (4.82 MB)</button>
+            <button class="batch-btn active" data-batch="16" type="button">B=16 (9.63 MB)</button>
+          </div>
+        </div>
+
+        <!-- 4 (Top). Live Byte-Stream Anatomy Bar -->
+        <div class="anatomy-card">
+          <div class="anatomy-header">
             <div>
-              <h3 id="ins-title" class="mono">benign_b1</h3>
+              <span class="anatomy-eyebrow mono">Live Byte-Stream Anatomy — What Gets Scanned vs. $O(1)$ Cursor Jump</span>
+              <h3 id="ins-title" class="mono">Valid Multi-Chunk (FP32 [4] + FP32 [1])</h3>
               <p id="ins-summary" class="ins-summary"></p>
             </div>
-            <span id="ins-badge" class="badge badge-green">ALLOW</span>
+            <span id="ins-badge" class="verdict-pill is-allow">ALLOW</span>
           </div>
 
-          <div>
-            <div class="stream-label">
-              On-Wire Byte Stream (Click any TLV segment to inspect)
+          <div class="anatomy-bar-wrap">
+            <div class="anatomy-bar" id="anatomy-bar">
+              <div id="anatomy-seg-scanned" class="anatomy-seg is-scanned" style="width: 18%;">
+                <span class="anatomy-seg-label mono" id="anatomy-scanned-short">Scanned</span>
+              </div>
+              <div id="anatomy-seg-skipped" class="anatomy-seg is-skipped" style="width: 82%;">
+                <span class="anatomy-seg-label mono" id="anatomy-skipped-short">O(1) Cursor Jump (Skipped Tensor Bulk)</span>
+              </div>
             </div>
-            <div id="hex-stream" class="hex-stream"></div>
+            <div class="anatomy-legend">
+              <div class="anatomy-legend-item">
+                <span class="anatomy-swatch is-scanned"></span>
+                <div>
+                  <strong class="mono" id="anatomy-scanned-text">63 B inspected (0.01%)</strong>
+                  <span>5B gRPC Prefix + Field 1..5 Metadata TLV Tags &amp; Shape Varints</span>
+                </div>
+              </div>
+              <div class="anatomy-legend-item">
+                <span class="anatomy-swatch is-skipped"></span>
+                <div>
+                  <strong class="mono" id="anatomy-skipped-text">602,112 B skipped in O(1) (99.99%)</strong>
+                  <span>Field 7 <code>raw_input_contents</code> Bulk Tensor Buffer — Cursor Jumps Directly Over Float Bytes</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Two-Column Interactive Builder with Center SVG Parity Connectors -->
+        <div class="builder-workspace" id="builder-workspace">
+          <!-- Left Column: Field 5 InferInputTensor List -->
+          <div class="builder-col">
+            <div class="builder-col-head">
+              <div>
+                <span class="builder-col-tag mono">Field 5 • Metadata Scanned</span>
+                <h4><code>InferInputTensor</code> List</h4>
+              </div>
+              <button id="add-tensor-btn" class="builder-action-btn mono" type="button">+ Add Input Tensor</button>
+            </div>
+            <div id="builder-tensors-list" class="builder-card-list"></div>
           </div>
 
-          <div id="segment-detail" class="segment-detail-box"></div>
+          <!-- Center Column: Dynamic SVG Parity Connectors -->
+          <div class="parity-connector-col" aria-hidden="true">
+            <div class="parity-col-label mono">1:1 Parity</div>
+            <svg id="parity-connector-svg" class="parity-connector-svg"></svg>
+          </div>
 
-          <div class="scanner-verdict-grid">
-            <div class="verdict-cell">
-              <span class="k">Scanner Verdict</span>
-              <span id="v-error" class="v mono">None</span>
+          <!-- Right Column: Field 7 raw_input_contents Chunks -->
+          <div class="builder-col">
+            <div class="builder-col-head">
+              <div>
+                <span class="builder-col-tag mono">Field 7 • O(1) Cursor Jump</span>
+                <h4><code>raw_input_contents</code> Chunks</h4>
+              </div>
+              <div class="builder-btn-row">
+                <button id="swap-chunks-btn" class="builder-action-btn is-secondary mono" type="button" title="Swap chunk byte lengths">⇄ Swap Chunks</button>
+                <button id="add-chunk-btn" class="builder-action-btn mono" type="button">+ Add Raw Chunk</button>
+              </div>
             </div>
-            <div class="verdict-cell">
-              <span class="k">Envoy / gRPC Status</span>
-              <span id="v-http" class="v mono">200 OK</span>
+            <div id="builder-chunks-list" class="builder-card-list"></div>
+          </div>
+        </div>
+
+        <!-- 3. Structural Stress Controls -->
+        <div class="stress-controls-bar">
+          <div class="stress-control-item">
+            <div class="stress-control-head">
+              <label for="slider-depth" class="mono">3A. Submessage Nesting Depth (<code>MAX_DEPTH = 16</code>)</label>
+              <span id="slider-depth-val" class="mono stress-val">2 / 16</span>
             </div>
-            <div class="verdict-cell">
-              <span class="k">Nesting Depth Reached</span>
-              <span id="v-depth" class="v mono">1 / 16</span>
+            <input id="slider-depth" type="range" min="1" max="20" value="2" class="stress-slider" />
+            <div class="stress-ticks mono">
+              <span>D=1</span>
+              <span>D=16 (Boundary Allow)</span>
+              <span class="is-danger">D=17..20 (NestingLimitExceeded)</span>
             </div>
-            <div class="verdict-cell">
-              <span class="k">Tensor Shape Product</span>
-              <span id="v-elements" class="v mono">150,528</span>
+          </div>
+
+          <div class="stress-control-item">
+            <div class="stress-control-head">
+              <label for="slider-tags" class="mono">3B. Scanned TLV &amp; Packed Tags (<code>MAX_TAGS = 1,024</code>)</label>
+              <span id="slider-tags-val" class="mono stress-val">14 / 1,024</span>
             </div>
-            <div class="verdict-cell">
-              <span class="k">O(1) Skipped Bulk Bytes</span>
-              <span id="v-skipped" class="v mono">602,131 B</span>
+            <input id="slider-tags" type="range" min="1" max="1500" value="14" class="stress-slider" />
+            <div class="stress-ticks mono">
+              <span>1 tag</span>
+              <span>1,024 (Ceiling)</span>
+              <span class="is-danger">1,025..1,500 (TagLimitExceeded)</span>
             </div>
-            <div class="verdict-cell">
-              <span class="k">Total Framed Size</span>
-              <span id="v-bytes" class="v mono">602,175 B</span>
-            </div>
+          </div>
+        </div>
+
+        <!-- On-Wire TLV Byte Stream & Segment Inspector -->
+        <div class="wire-stream-block">
+          <div class="stream-label">
+            Generated On-Wire TLV Byte Stream (Click any segment to inspect <code>custos-core</code> state transition)
+          </div>
+          <div id="hex-stream" class="hex-stream"></div>
+          <div id="segment-detail" class="segment-detail-box" style="margin-top: 0.75rem;"></div>
+        </div>
+
+        <!-- 4 (Bottom). 6-Cell Scanner Verdict Strip -->
+        <div class="scanner-verdict-grid">
+          <div class="verdict-cell">
+            <span class="k">Scanner Verdict</span>
+            <span id="v-error" class="v mono">ALLOW (Continue)</span>
+          </div>
+          <div class="verdict-cell">
+            <span class="k">Envoy / gRPC Status</span>
+            <span id="v-http" class="v mono">200 OK / gRPC OK (0)</span>
+          </div>
+          <div class="verdict-cell">
+            <span class="k">Total vs. Max Tensor Elements</span>
+            <span id="v-elements" class="v mono">5 / 16,777,216</span>
+          </div>
+          <div class="verdict-cell">
+            <span class="k">1-to-1 Chunk Parity Status</span>
+            <span id="v-parity" class="v mono">2 / 2 Chunks Aligned</span>
+          </div>
+          <div class="verdict-cell">
+            <span class="k">Tags Scanned</span>
+            <span id="v-tags" class="v mono">14 / 1,024</span>
+          </div>
+          <div class="verdict-cell">
+            <span class="k">Core Heap Allocations</span>
+            <span id="v-allocs" class="v mono" style="color: var(--ctp-green);">0 Bytes (#![no_std])</span>
           </div>
         </div>
       </div>
@@ -416,9 +548,44 @@
         </p>
       </div>
 
+      <!-- Signature Survivability & O(1) Scaling Spotlight Row -->
+      <div class="grid-2" style="margin-bottom: 1.75rem;">
+        <div class="chart-box reveal">
+          <div class="chart-title-row">
+            <h4>Log-Scale Tail-Latency CDF — <code>C=500</code> Burst Survivability</h4>
+            <span class="badge badge-green mono">3.4× Lower P99 Tail</span>
+          </div>
+          <p class="chart-lead">
+            During the <code>C=500</code> concurrent saturating-burst attack (90% Attack / 10% Benign), Unprotected Control and Proxy Baseline stall at <strong>511.3 ms</strong> and <strong>518.0 ms</strong> P99, while Custos Production keeps legitimate traffic at <strong>153.0 ms P99</strong> (<code>250/250 OK</code>).
+          </p>
+          <div class="chart-sub">
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Control (511.3 ms P99)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Baseline (518.0 ms P99)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos (153.0 ms P99)</span>
+          </div>
+          <svg id="burst-cdf-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="chart-box reveal">
+          <div class="chart-title-row">
+            <h4>$O(1)$ Batch Scaling vs. $O(N)$ Linear Parser (<code>B=1..B=16</code>)</h4>
+            <span class="badge badge-mauve mono">63 B Scanned at 9.63 MB</span>
+          </div>
+          <p class="chart-lead">
+            Compares the constant wire-scanner overhead of <code>custos-core</code> (which jumps over Field 7 tensor buffers in $O(1)$) against an $O(N)$ linear parser across ResNet-50 batch sizes <code>B=1</code> (<code>602 KB</code>) through <code>B=16</code> (<code>9.63 MB</code>).
+          </p>
+          <div class="chart-sub">
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span><code>custos-core</code> $O(1)$ Scan (~14 µs flat)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>$O(N)$ Full-Byte Linear Parser</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Envoy UDS Serialization Delta</span>
+          </div>
+          <svg id="batch-scaling-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
       <div class="dashboard-controls reveal">
          <div class="control-group">
-           <span class="control-label">Regime:</span>
+           <span class="control-label">Regime Explorer:</span>
            <button class="tab-btn active" data-regime="interleaved" type="button">94% Benign / 6% Attack (Interleaved)</button>
            <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign (FP32, BYTES &amp; Mixed)</button>
            <button class="tab-btn" data-regime="saturating-burst" type="button">Saturating Burst (C=500 Fan-Out: 90% Attack / 10% Benign)</button>
@@ -472,12 +639,12 @@
         </table>
       </div>
 
-      <!-- 59-Payload Oracle Sweep Matrix -->
+      <!-- 59-Payload Traffic-Light Oracle Sweep Matrix -->
       <div class="section-header reveal" style="margin-top: 3rem;">
         <span class="section-tag mono">05 / Deterministic Corpus Verification (--regime oracle-sweep)</span>
-        <h3 class="section-title" style="font-size: 1.45rem;">59-Payload Oracle Sweep Matrix</h3>
+        <h3 class="section-title" style="font-size: 1.45rem;">59-Payload Traffic-Light Oracle Matrix</h3>
         <p class="section-desc">
-          Sequential verification of every entry in <code>corpus/manifest.json</code> across all three live LAN architectures: <strong>16</strong> benign payloads (<code>FP32</code> batches, <code>BYTES</code>, multi-chunk, inline <code>InferTensorContents</code>, zero-axis <code>[1,0,224,224]</code>, <code>BOOL</code>/<code>FP16</code>/<code>BF16</code>/<code>FP64</code>), <strong>2</strong> <code>MAX_DEPTH = 16</code> boundary-allow payloads, <strong>33</strong> adversarial &amp; oracle-reject <code>.pb</code> payloads, <strong>3</strong> HTTP/2 framing bodies (<code>h2c</code>), and <strong>5</strong> KServe v2 RPC method probes.
+          Grouped verification of all <strong>59</strong> deterministic corpus payloads in <code>corpus/manifest.json</code> across five threat &amp; boundary families. Click any group row to expand or collapse its individual wire payloads.
         </p>
       </div>
 
@@ -488,9 +655,9 @@
             <span class="badge badge-green">59 / 59 Matched</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-green);">
-            ✓ 20 / 20 Allow Admitted (OK, 0% FPR)<br/>
-            ✓ 39 / 39 Reject Blocked (34 INVALID_ARGUMENT + 5 PERMISSION_DENIED)<br/>
-            ✓ 0 Backend INTERNAL Faults • 0 Mismatches
+            ✓ 20 / 20 Benign &amp; Boundary Admitted (0% FPR)<br/>
+            ✓ 39 / 39 Exploits &amp; Probes Blocked (100% TP)<br/>
+            ✓ 0 Backend INTERNAL Faults • 0 Misses
           </p>
         </div>
         <div class="card reveal">
@@ -499,8 +666,8 @@
             <span class="badge badge-blue">20 / 59 Matched</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
-            ✓ 20 / 20 Allow Admitted (OK)<br/>
-            ✕ 0 / 39 Reject Blocked (39 Mismatches)<br/>
+            ✓ 20 / 20 Benign &amp; Boundary Admitted<br/>
+            ✕ 0 / 39 Exploits &amp; Probes Blocked (39 Misses)<br/>
             ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
           </p>
         </div>
@@ -510,36 +677,23 @@
             <span class="badge badge-red">20 / 59 Matched</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
-            ✓ 20 / 20 Allow Admitted (OK)<br/>
-            ✕ 0 / 39 Reject Blocked (39 Mismatches)<br/>
+            ✓ 20 / 20 Benign &amp; Boundary Admitted<br/>
+            ✕ 0 / 39 Exploits &amp; Probes Blocked (39 Misses)<br/>
             ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
           </p>
         </div>
       </div>
 
-      <div class="dashboard-controls reveal">
-        <div class="control-group">
-          <span class="control-label">Oracle Filter:</span>
-          <button class="tab-btn active" data-oracle-filter="all" type="button">All 59 Payloads (59/59 Match)</button>
-          <button class="tab-btn" data-oracle-filter="allow" type="button">Benign &amp; Boundary Allow (20/20 OK)</button>
-          <button class="tab-btn" data-oracle-filter="reject-pb" type="button">Protobuf &amp; Tensor Rejects (33/33 Dropped)</button>
-          <button class="tab-btn" data-oracle-filter="probes" type="button">HTTP/2 Framing &amp; RPC Probes (8/8 Enforced)</button>
-        </div>
-      </div>
-
       <div class="table-wrap reveal">
-        <table>
+        <table class="traffic-light-table">
           <thead>
             <tr>
-              <th>Payload Name</th>
-              <th>Category</th>
-              <th>Framing &amp; RPC</th>
-              <th>Expected</th>
+              <th>Corpus Group (59 Payloads)</th>
+              <th>Oracle Policy</th>
               <th>Custos Production (:30803)</th>
-              <th>Custos Latency</th>
               <th>Proxy Baseline (:30802)</th>
               <th>Unprotected Control (:30801)</th>
-              <th>Wire &amp; Invariant Notes</th>
+              <th>Defense Invariant &amp; Coverage</th>
             </tr>
           </thead>
           <tbody id="oracle-tbody"></tbody>
