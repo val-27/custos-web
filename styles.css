@@ -2278,9 +2278,45 @@ tr:last-child td {
 }
 
 /* 5-Group Traffic-Light Oracle Matrix */
+.trials-table {
+  font-size: 0.8rem;
+}
+
+.trials-table th,
+.trials-table td {
+  padding: 0.55rem 0.65rem;
+}
+
+.traffic-light-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
 .traffic-light-table th,
 .traffic-light-table td {
   vertical-align: middle;
+  padding: 0.65rem 0.7rem;
+  overflow-wrap: break-word;
+}
+
+.traffic-light-table th:nth-child(1),
+.traffic-light-table td:nth-child(1) {
+  width: 34%;
+}
+
+.traffic-light-table th:nth-child(2),
+.traffic-light-table td:nth-child(2),
+.traffic-light-table th:nth-child(3),
+.traffic-light-table td:nth-child(3),
+.traffic-light-table th:nth-child(4),
+.traffic-light-table td:nth-child(4) {
+  width: 14.5%;
+  text-align: center;
+}
+
+.traffic-light-table th:nth-child(5),
+.traffic-light-table td:nth-child(5) {
+  width: 22.5%;
 }
 
 .tl-group-row {
@@ -2295,28 +2331,32 @@ tr:last-child td {
 .tl-group-title {
   font-weight: 700;
   color: var(--ctp-text);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .tl-group-sub {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--ctp-subtext0);
-  margin-top: 0.18rem;
+  margin-top: 0.16rem;
+  line-height: 1.35;
 }
 
 .tl-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.36rem 0.75rem;
+  justify-content: center;
+  gap: 0.32rem;
+  padding: 0.28rem 0.55rem;
   border-radius: var(--r-pill);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .tl-pill.is-pass {

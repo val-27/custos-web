@@ -4369,14 +4369,14 @@ function renderOracleTable() {
     const isExpanded = expandedOracleGroups.has(g.id);
 
     const prodText = isAllowGroup
-      ? `${prodMatched}/${total} Admitted (0% FPR)`
-      : `${prodMatched}/${total} Blocked (100%)`;
+      ? `${prodMatched}/${total} Admitted`
+      : `${prodMatched}/${total} Blocked`;
     const baseText = isAllowGroup
       ? `${baseMatched}/${total} Admitted`
-      : `${baseMatched}/${total} Blocked (${total - baseMatched} Misses)`;
+      : `0/${total} (${total - baseMatched} Misses)`;
     const ctrlText = isAllowGroup
       ? `${ctrlMatched}/${total} Admitted`
-      : `${ctrlMatched}/${total} Blocked (${total - ctrlMatched} Misses)`;
+      : `0/${total} (${total - ctrlMatched} Misses)`;
 
     html += `
       <tr class="tl-group-row" data-oracle-group="${g.id}">

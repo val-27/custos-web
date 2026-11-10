@@ -619,19 +619,19 @@
       <div id="chart-tooltip" class="chart-tooltip" role="status" aria-live="polite" hidden></div>
 
       <div class="table-wrap reveal">
-        <table>
+        <table class="trials-table">
           <thead>
             <tr>
               <th>Architecture</th>
               <th>Regime</th>
               <th>Benign Profile</th>
-              <th>Achieved / Offered RPS</th>
+              <th>Achieved / Offered</th>
               <th>P50</th>
               <th>P99</th>
               <th>P99.99</th>
-              <th>FPR (Benign Drop)</th>
-              <th>TP Drop Rate</th>
-              <th title="Total Peak RSS across the data path (Triton + Envoy + Sidecar)">Total Peak RSS</th>
+              <th>FPR</th>
+              <th>TP Drop</th>
+              <th title="Total Peak RSS across the data path (Triton + Envoy + Sidecar)">Peak RSS</th>
               <th>Server Survival</th>
             </tr>
           </thead>
@@ -689,10 +689,10 @@
           <thead>
             <tr>
               <th>Corpus Group (59 Payloads)</th>
-              <th>Custos Production (:30803)</th>
-              <th>Proxy Baseline (:30802)</th>
-              <th>Unprotected Control (:30801)</th>
-              <th>Defense Invariant &amp; Coverage</th>
+              <th>Custos Production</th>
+              <th>Proxy Baseline</th>
+              <th>Unprotected Control</th>
+              <th>Defense Invariant</th>
             </tr>
           </thead>
           <tbody id="oracle-tbody"></tbody>
