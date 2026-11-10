@@ -4373,10 +4373,10 @@ function renderOracleTable() {
       : `${prodMatched}/${total} Blocked`;
     const baseText = isAllowGroup
       ? `${baseMatched}/${total} Admitted`
-      : `0/${total} (${total - baseMatched} Misses)`;
+      : `0/${total} Blocked`;
     const ctrlText = isAllowGroup
       ? `${ctrlMatched}/${total} Admitted`
-      : `0/${total} (${total - ctrlMatched} Misses)`;
+      : `0/${total} Blocked`;
 
     html += `
       <tr class="tl-group-row" data-oracle-group="${g.id}">
