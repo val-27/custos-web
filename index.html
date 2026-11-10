@@ -568,15 +568,15 @@
 
         <div class="chart-box reveal">
           <div class="chart-title-row">
-            <h4>$O(1)$ Batch Scaling vs. $O(N)$ Linear Parser (<code>B=1..B=16</code>)</h4>
+            <h4>O(1) Batch Scaling vs. O(N) Linear Parser (<code>B=1..B=16</code>)</h4>
             <span class="badge badge-mauve mono">63 B Scanned at 9.63 MB</span>
           </div>
           <p class="chart-lead">
-            Compares the constant wire-scanner overhead of <code>custos-core</code> (which jumps over Field 7 tensor buffers in $O(1)$) against an $O(N)$ linear parser across ResNet-50 batch sizes <code>B=1</code> (<code>602 KB</code>) through <code>B=16</code> (<code>9.63 MB</code>).
+            Compares the constant wire-scanner overhead of <code>custos-core</code> (which jumps over Field 7 tensor buffers in O(1)) against an O(N) linear parser across ResNet-50 batch sizes <code>B=1</code> (<code>602 KB</code>) through <code>B=16</code> (<code>9.63 MB</code>).
           </p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span><code>custos-core</code> $O(1)$ Scan (~14 µs flat)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>$O(N)$ Full-Byte Linear Parser</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span><code>custos-core</code> O(1) Scan (~14 µs flat)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>O(N) Full-Byte Linear Parser</span>
             <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Envoy UDS Serialization Delta</span>
           </div>
           <svg id="batch-scaling-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>

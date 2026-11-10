@@ -2333,6 +2333,13 @@ tr:last-child td {
   color: var(--ctp-text);
   font-size: 0.85rem;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.tl-group-meta {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
@@ -2372,7 +2379,7 @@ tr:last-child td {
 }
 
 .tl-expand-btn {
-  margin-left: auto;
+  margin-left: 0;
   padding: 0.18rem 0.52rem;
   border-radius: var(--r-sm);
   border: 1px solid var(--ctp-surface1);

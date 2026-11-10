@@ -4383,8 +4383,10 @@ function renderOracleTable() {
         <td>
           <div class="tl-group-title">
             <span>${g.title}</span>
-            <span class="badge badge-mauve mono">${total} payloads</span>
-            <button class="tl-expand-btn mono" type="button">${isExpanded ? "Hide ▴" : "Inspect ▾"}</button>
+            <div class="tl-group-meta">
+              <span class="badge badge-mauve mono">${total} payloads</span>
+              <button class="tl-expand-btn mono" type="button">${isExpanded ? "Hide ▴" : "Inspect ▾"}</button>
+            </div>
           </div>
           <span class="tl-group-sub">${g.subtitle}</span>
         </td>
