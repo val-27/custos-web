@@ -4388,7 +4388,6 @@ function renderOracleTable() {
           </div>
           <span class="tl-group-sub">${g.subtitle}</span>
         </td>
-        <td><span class="badge ${g.policyBadge} mono">${g.policy}</span></td>
         <td>${renderTrafficLightPill(prodMatched === total, prodText)}</td>
         <td>${renderTrafficLightPill(baseMatched === total, baseText)}</td>
         <td>${renderTrafficLightPill(ctrlMatched === total, ctrlText)}</td>
@@ -4420,7 +4419,7 @@ function renderOracleTable() {
 
       html += `
         <tr class="tl-drawer-row">
-          <td colspan="6">
+          <td colspan="5">
             <div class="tl-drawer-grid">${chipsHtml}</div>
           </td>
         </tr>
