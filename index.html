@@ -319,37 +319,47 @@
     <!-- Section 2: Interactive Byte-Level Wire Inspector -->
     <section id="wire-inspector" class="section">
       <div class="section-header reveal">
-        <span class="section-tag mono">02 / Zero-Copy Wire Format Analysis</span>
-        <h2 class="section-title">Interactive KServe v2 Builder &amp; Byte-Stream Anatomy</h2>
+        <span class="section-tag mono">02 / How Custos checks an inference request</span>
+        <h2 class="section-title">Wire Inspector</h2>
         <p class="section-desc">
-          Build or load a live KServe v2 <code>ModelInferRequest</code> below to see why <code>custos-core</code> runs in constant time: it inspects only the compact Protobuf metadata headers (<code>Field 1..5</code>) and jumps over multi-megabyte tensor buffers (<code>Field 7</code>) in <strong>$O(1)$</strong> while enforcing strict 1-to-1 per-input byte parity.
+          See how Custos checks each input description, confirms its data has the expected size, and skips over the large tensor data without reading every value.
         </p>
       </div>
 
       <div class="builder-shell reveal">
+        <div class="inspector-howto">
+          <strong>How to read this example</strong>
+          <ol>
+            <li>Choose a request scenario.</li>
+            <li>Match each input description on the left with its data on the right.</li>
+            <li>Check the result: the data size must match the input’s datatype and shape.</li>
+          </ol>
+          <p><span class="inspector-key is-check"></span>Custos checks metadata <span class="inspector-key is-skip"></span>Custos jumps over tensor data <span class="inspector-key is-block"></span>Request is blocked</p>
+        </div>
+
         <!-- 1. Quick Preset Bar -->
         <div class="preset-bar">
-          <span class="preset-bar-label mono">1. Quick Scenarios:</span>
+          <span class="preset-bar-label mono">Try a scenario:</span>
           <div id="builder-preset-btns" class="preset-btn-group">
             <button class="preset-chip active" data-preset="valid-multichunk" type="button">
               <span class="chip-dot is-allow"></span>
-              <span>Valid Multi-Chunk (FP32 [4] + FP32 [1])</span>
+              <span>Valid request · two inputs match their data</span>
             </button>
             <button class="preset-chip" data-preset="chunk-swap" type="button">
               <span class="chip-dot is-reject"></span>
-              <span>Chunk Swap Bypass ([16B, 4B] vs [4B, 16B])</span>
+              <span>Wrong data paired with each input</span>
             </button>
             <button class="preset-chip" data-preset="resnet-batch" type="button">
               <span class="chip-dot is-allow"></span>
-              <span>ResNet-50 Batch Scaling (B=1 to B=16, 9.63 MB)</span>
+              <span>Large image batch · see how much data is skipped</span>
             </button>
             <button class="preset-chip" data-preset="shape-wrap" type="button">
               <span class="chip-dot is-reject"></span>
-              <span>64-Bit Shape Wrap ([2, 2^62, 2])</span>
+              <span>Impossible input shape</span>
             </button>
             <button class="preset-chip" data-preset="cve-2024-0088" type="button">
               <span class="chip-dot is-reject"></span>
-              <span>CVE-2024-0088 Shared-Memory Param Injection</span>
+              <span>Unexpected shared-memory setting</span>
             </button>
           </div>
         </div>
@@ -370,9 +380,9 @@
         <div class="anatomy-card">
           <div class="anatomy-header">
             <div>
-              <span class="anatomy-eyebrow mono">Live Byte-Stream Anatomy — What Gets Scanned vs. $O(1)$ Cursor Jump</span>
-              <h3 id="ins-title" class="mono">Valid Multi-Chunk (FP32 [4] + FP32 [1])</h3>
-              <p id="ins-summary" class="ins-summary"></p>
+          <span class="anatomy-eyebrow mono">What Custos checks and skips</span>
+              <h3 id="ins-title" class="mono">Valid request · two inputs match their data</h3>
+              <p id="ins-summary" class="ins-summary" role="status" aria-live="polite"></p>
             </div>
             <span id="ins-badge" class="verdict-pill is-allow">ALLOW</span>
           </div>
@@ -380,29 +390,30 @@
           <div class="anatomy-bar-wrap">
             <div class="anatomy-bar" id="anatomy-bar">
               <div id="anatomy-seg-scanned" class="anatomy-seg is-scanned" style="width: 18%;">
-                <span class="anatomy-seg-label mono" id="anatomy-scanned-short">Scanned</span>
+                <span class="anatomy-seg-label mono" id="anatomy-scanned-short">Metadata checked</span>
               </div>
               <div id="anatomy-seg-skipped" class="anatomy-seg is-skipped" style="width: 82%;">
-                <span class="anatomy-seg-label mono" id="anatomy-skipped-short">O(1) Cursor Jump (Skipped Tensor Bulk)</span>
+                <span class="anatomy-seg-label mono" id="anatomy-skipped-short">Tensor data skipped</span>
               </div>
             </div>
             <div class="anatomy-legend">
               <div class="anatomy-legend-item">
                 <span class="anatomy-swatch is-scanned"></span>
                 <div>
-                  <strong class="mono" id="anatomy-scanned-text">63 B inspected (0.01%)</strong>
-                  <span>5B gRPC Prefix + Field 1..5 Metadata TLV Tags &amp; Shape Varints</span>
+                <strong class="mono" id="anatomy-scanned-text">Metadata checked</strong>
+                  <span>Input names, datatypes, shapes, and request structure</span>
                 </div>
               </div>
               <div class="anatomy-legend-item">
                 <span class="anatomy-swatch is-skipped"></span>
                 <div>
-                  <strong class="mono" id="anatomy-skipped-text">602,112 B skipped in O(1) (99.99%)</strong>
-                  <span>Field 7 <code>raw_input_contents</code> Bulk Tensor Buffer — Cursor Jumps Directly Over Float Bytes</span>
+                <strong class="mono" id="anatomy-skipped-text">Tensor data skipped</strong>
+                  <span>For fixed-width data, Custos jumps over the values. For BYTES inputs, it checks each length prefix.</span>
                 </div>
               </div>
             </div>
           </div>
+          <p class="anatomy-scale-note">The blue metadata slice is enlarged so it stays visible; the bar is illustrative and not to scale. Byte counts below are the actual amounts.</p>
         </div>
 
         <!-- 2. Two-Column Interactive Builder with Center SVG Parity Connectors -->
@@ -411,17 +422,17 @@
           <div class="builder-col">
             <div class="builder-col-head">
               <div>
-                <span class="builder-col-tag mono">Field 5 • Metadata Scanned</span>
-                <h4><code>InferInputTensor</code> List</h4>
+                <span class="builder-col-tag mono">Input description</span>
+                <h4>Datatype and shape</h4>
               </div>
-              <button id="add-tensor-btn" class="builder-action-btn mono" type="button">+ Add Input Tensor</button>
+              <button id="add-tensor-btn" class="builder-action-btn mono" type="button">+ Add input</button>
             </div>
             <div id="builder-tensors-list" class="builder-card-list"></div>
           </div>
 
           <!-- Center Column: Dynamic SVG Parity Connectors -->
           <div class="parity-connector-col" aria-hidden="true">
-            <div class="parity-col-label mono">1:1 Parity</div>
+            <div class="parity-col-label mono">Match by position</div>
             <svg id="parity-connector-svg" class="parity-connector-svg"></svg>
           </div>
 
@@ -429,12 +440,12 @@
           <div class="builder-col">
             <div class="builder-col-head">
               <div>
-                <span class="builder-col-tag mono">Field 7 • O(1) Cursor Jump</span>
-                <h4><code>raw_input_contents</code> Chunks</h4>
+                <span class="builder-col-tag mono">Input data</span>
+                <h4>Data size</h4>
               </div>
               <div class="builder-btn-row">
-                <button id="swap-chunks-btn" class="builder-action-btn is-secondary mono" type="button" title="Swap chunk byte lengths">⇄ Swap Chunks</button>
-                <button id="add-chunk-btn" class="builder-action-btn mono" type="button">+ Add Raw Chunk</button>
+                <button id="swap-chunks-btn" class="builder-action-btn is-secondary mono" type="button" title="Swap the data sizes between inputs">⇄ Swap data sizes</button>
+                <button id="add-chunk-btn" class="builder-action-btn mono" type="button">+ Add data item</button>
               </div>
             </div>
             <div id="builder-chunks-list" class="builder-card-list"></div>
@@ -442,7 +453,9 @@
         </div>
 
         <!-- 3. Structural Stress Controls -->
-        <div class="stress-controls-bar">
+        <details class="technical-details">
+          <summary>Advanced limits (for Protobuf and scanner behavior)</summary>
+          <div class="stress-controls-bar">
           <div class="stress-control-item">
             <div class="stress-control-head">
               <label for="slider-depth" class="mono">3A. Submessage Nesting Depth (<code>MAX_DEPTH = 16</code>)</label>
@@ -468,19 +481,22 @@
               <span class="is-danger">1,025..1,500 (TagLimitExceeded)</span>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
 
         <!-- On-Wire TLV Byte Stream & Segment Inspector -->
         <div class="wire-stream-block">
           <div class="stream-label">
-            Generated On-Wire TLV Byte Stream (Click any segment to inspect <code>custos-core</code> state transition)
+            Request layout (schematic) · Select a segment to see what Custos does. Bulk tensor values are abbreviated.
           </div>
           <div id="hex-stream" class="hex-stream"></div>
           <div id="segment-detail" class="segment-detail-box" style="margin-top: 0.75rem;"></div>
         </div>
 
         <!-- 4 (Bottom). 6-Cell Scanner Verdict Strip -->
-        <div class="scanner-verdict-grid">
+        <details class="technical-details">
+          <summary>Technical readout</summary>
+          <div class="scanner-verdict-grid">
           <div class="verdict-cell">
             <span class="k">Scanner Verdict</span>
             <span id="v-error" class="v mono">ALLOW (Continue)</span>
@@ -505,7 +521,8 @@
             <span class="k">Core Heap Allocations</span>
             <span id="v-allocs" class="v mono" style="color: var(--ctp-green);">0 Bytes (#![no_std])</span>
           </div>
-        </div>
+          </div>
+        </details>
       </div>
     </section>
 

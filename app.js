@@ -2666,7 +2666,7 @@ const MAX_TAGS_SCANNED = 1024;
 
 let builderState = {
   presetId: "valid-multichunk",
-  title: "Valid Multi-Chunk (FP32 [4] + FP32 [1])",
+  title: "Valid request · two inputs match their data",
   batchSize: 16,
   nestingDepth: 2,
   tagsScanned: 14,
@@ -2682,12 +2682,22 @@ let builderState = {
 
 let nextBuilderItemId = 10;
 
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 function loadBuilderPreset(presetId, customBatchSize) {
   const bSize = customBatchSize || 16;
   if (presetId === "valid-multichunk") {
     builderState = {
       presetId,
-      title: "Valid Multi-Chunk (FP32 [4] + FP32 [1])",
+      title: "Valid request · two inputs match their data",
       batchSize: 16,
       nestingDepth: 2,
       tagsScanned: 14,
@@ -2703,7 +2713,7 @@ function loadBuilderPreset(presetId, customBatchSize) {
   } else if (presetId === "chunk-swap") {
     builderState = {
       presetId,
-      title: "Chunk Swap Bypass (chunk_swap_fp32: [16B, 4B] vs [4B, 16B])",
+      title: "Blocked request · data sizes are paired incorrectly",
       batchSize: 16,
       nestingDepth: 2,
       tagsScanned: 14,
@@ -2721,7 +2731,7 @@ function loadBuilderPreset(presetId, customBatchSize) {
     const mbLabel = (rawBytes / 1e6).toFixed(2);
     builderState = {
       presetId,
-      title: `ResNet-50 Batch Scaling (B=${bSize}, ${mbLabel} MB)`,
+      title: `Large image batch · ${mbLabel} MB of input data`,
       batchSize: bSize,
       nestingDepth: 2,
       tagsScanned: 11,
@@ -2741,7 +2751,7 @@ function loadBuilderPreset(presetId, customBatchSize) {
   } else if (presetId === "shape-wrap") {
     builderState = {
       presetId,
-      title: "64-Bit Shape Wrap ([2, 2^62, 2])",
+      title: "Blocked request · impossible input shape",
       batchSize: 16,
       nestingDepth: 2,
       tagsScanned: 11,
@@ -2761,7 +2771,7 @@ function loadBuilderPreset(presetId, customBatchSize) {
   } else if (presetId === "cve-2024-0088") {
     builderState = {
       presetId,
-      title: "CVE-2024-0088 Shared-Memory Param Injection",
+      title: "Blocked request · unexpected shared-memory setting",
       batchSize: 16,
       nestingDepth: 3,
       tagsScanned: 19,
@@ -3027,7 +3037,7 @@ function renderBuilderAll() {
         return `
           <div class="builder-item-card ${res.ok ? "is-valid" : "is-invalid"}" data-tensor-idx="${idx}">
             <div class="builder-card-top">
-              <span class="builder-card-title mono">Input #${idx} (<code>${t.name}</code>)</span>
+              <span class="builder-card-title mono">Input ${idx + 1} (<code>${escapeHTML(t.name)}</code>)</span>
               ${
                 builderState.tensors.length > 1
                   ? `<button class="builder-remove-btn mono" data-remove-tensor="${idx}" type="button">Remove</button>`
@@ -3042,16 +3052,16 @@ function renderBuilderAll() {
                 </select>
               </div>
               <div class="builder-field">
-                <label class="mono">Shape (Comma-Separated)</label>
-                <input type="text" class="builder-input" data-tensor-shape="${idx}" value="${t.shapeStr}" />
+                <label class="mono">Shape (dimensions)</label>
+                <input type="text" class="builder-input" data-tensor-shape="${idx}" value="${escapeHTML(t.shapeStr)}" />
               </div>
             </div>
             <div class="builder-card-foot">
               <label class="builder-checkbox-label">
                 <input type="checkbox" data-tensor-shm="${idx}" ${t.injectShm ? "checked" : ""} />
-                <span>Inject <code>shared_memory_region</code> (CVE-2024-0088)</span>
+                <span>Inject unexpected shared-memory setting</span>
               </label>
-              <span class="mono" style="color:${statusColor}; font-weight:600">${statusIcon} ${res.reason}</span>
+              <span class="mono" style="color:${statusColor}; font-weight:600">${statusIcon} ${escapeHTML(res.reason)}</span>
             </div>
           </div>
         `;
@@ -3062,7 +3072,7 @@ function renderBuilderAll() {
       sel.addEventListener("change", () => {
         const i = Number(sel.dataset.tensorDtype);
         builderState.tensors[i].datatype = sel.value;
-        builderState.title = "Custom Interactive ModelInferRequest";
+        builderState.title = "Custom request";
         renderBuilderAll();
       });
     });
@@ -3071,7 +3081,7 @@ function renderBuilderAll() {
       inp.addEventListener("input", () => {
         const i = Number(inp.dataset.tensorShape);
         builderState.tensors[i].shapeStr = inp.value;
-        builderState.title = "Custom Interactive ModelInferRequest";
+        builderState.title = "Custom request";
         renderBuilderSummaryAndConnectors();
       });
       inp.addEventListener("change", () => renderBuilderAll());
@@ -3081,7 +3091,7 @@ function renderBuilderAll() {
       chk.addEventListener("change", () => {
         const i = Number(chk.dataset.tensorShm);
         builderState.tensors[i].injectShm = chk.checked;
-        builderState.title = "Custom Interactive ModelInferRequest";
+        builderState.title = "Custom request";
         renderBuilderAll();
       });
     });
@@ -3105,11 +3115,18 @@ function renderBuilderAll() {
         const isAligned = pairedRes ? pairedRes.ok : false;
         const isBytesTensor = pairedTensor && pairedTensor.datatype === "BYTES";
         const expectedB = pairedRes ? pairedRes.expectedBytes : 0;
+        const pairStatus = !pairedRes
+          ? "no matching input description"
+          : pairedRes.ok
+            ? "valid size and input"
+            : pairedRes.actualBytes !== pairedRes.expectedBytes
+              ? "size mismatch"
+              : "input validation failed";
 
         return `
           <div class="builder-item-card ${isAligned ? "is-valid" : "is-invalid"}" data-chunk-idx="${idx}">
             <div class="builder-card-top">
-              <span class="builder-card-title mono">Field 7 Chunk #${idx} (<code>raw_input_contents[${idx}]</code>)</span>
+              <span class="builder-card-title mono">Data for input ${idx + 1}</span>
               ${
                 builderState.chunks.length > 1
                   ? `<button class="builder-remove-btn mono" data-remove-chunk="${idx}" type="button">Remove</button>`
@@ -3122,28 +3139,30 @@ function renderBuilderAll() {
               <div class="builder-fields-row">
                 <div class="builder-field">
                   <label class="mono">4B u32 Prefix</label>
-                  <input type="number" min="0" class="builder-input" data-chunk-prefix="${idx}" value="${c.u32Prefix || 0}" />
+                  <input type="number" min="0" class="builder-input" data-chunk-prefix="${idx}" value="${escapeHTML(c.u32Prefix || 0)}" />
                 </div>
                 <div class="builder-field">
                   <label class="mono">Actual Chunk Bytes</label>
-                  <input type="number" min="0" class="builder-input" data-chunk-bytes="${idx}" value="${c.byteLength}" />
+                  <input type="number" min="0" class="builder-input" data-chunk-bytes="${idx}" value="${escapeHTML(c.byteLength)}" />
                 </div>
               </div>
             `
                 : `
               <div class="builder-field">
-                <label class="mono">Chunk Byte Length (Skipped in $O(1)$)</label>
-                <input type="number" min="0" class="builder-input" data-chunk-bytes="${idx}" value="${c.byteLength}" />
+                <label class="mono">Data size (bytes)</label>
+                <input type="number" min="0" class="builder-input" data-chunk-bytes="${idx}" value="${escapeHTML(c.byteLength)}" />
               </div>
             `
             }
             <div class="builder-card-foot">
               <span class="mono" style="color:var(--ctp-subtext0)">
-                ${pairedTensor ? `Bound to Input #${idx} (expects ${expectedB.toLocaleString()} B)` : "Unbound extra chunk"}
+                ${pairedTensor
+                  ? `Input ${idx + 1}: expected ${expectedB.toLocaleString()} bytes · actual ${c.byteLength.toLocaleString()} bytes · ${pairStatus}`
+                  : "No matching input description for this data"}
               </span>
               ${
                 pairedTensor
-                  ? `<button class="builder-remove-btn mono" data-match-tensor="${idx}" type="button" style="border-color:var(--ctp-blue); color:var(--ctp-blue)">Match Tensor #${idx} (${expectedB.toLocaleString()} B)</button>`
+                  ? `<button class="builder-remove-btn mono" data-match-tensor="${idx}" type="button" style="border-color:var(--ctp-blue); color:var(--ctp-blue)">Set expected size (${expectedB.toLocaleString()} bytes)</button>`
                   : ""
               }
             </div>
@@ -3156,7 +3175,7 @@ function renderBuilderAll() {
       inp.addEventListener("input", () => {
         const i = Number(inp.dataset.chunkBytes);
         builderState.chunks[i].byteLength = Math.max(0, Number(inp.value) || 0);
-        builderState.title = "Custom Interactive ModelInferRequest";
+        builderState.title = "Custom request";
         renderBuilderSummaryAndConnectors();
       });
       inp.addEventListener("change", () => renderBuilderAll());
@@ -3166,7 +3185,7 @@ function renderBuilderAll() {
       inp.addEventListener("input", () => {
         const i = Number(inp.dataset.chunkPrefix);
         builderState.chunks[i].u32Prefix = Math.max(0, Number(inp.value) || 0);
-        builderState.title = "Custom Interactive ModelInferRequest";
+        builderState.title = "Custom request";
         renderBuilderSummaryAndConnectors();
       });
       inp.addEventListener("change", () => renderBuilderAll());
@@ -3201,6 +3220,7 @@ function renderBuilderAll() {
 
 function renderBuilderSummaryAndConnectors() {
   const evalRes = evaluateBuilderState();
+  const hasBytesInput = builderState.tensors.some((tensor) => tensor.datatype === "BYTES");
 
   // Update stress slider value pills
   const depthValEl = document.getElementById("slider-depth-val");
@@ -3221,7 +3241,7 @@ function renderBuilderSummaryAndConnectors() {
   const badgeEl = document.getElementById("ins-badge");
   if (badgeEl) {
     const kind = evalRes.ok ? "allow" : "reject";
-    const statusText = evalRes.ok ? "ALLOW (ResponseStatus::Continue)" : `REJECT (${evalRes.error})`;
+    const statusText = evalRes.ok ? "Allowed" : "Blocked";
     badgeEl.innerHTML = `${verdictIcon(kind)}<span class="verdict-text">${statusText}</span>`;
     badgeEl.className = `verdict-pill ${evalRes.ok ? "is-allow" : "is-reject"}`;
   }
@@ -3229,9 +3249,15 @@ function renderBuilderSummaryAndConnectors() {
   const summaryEl = document.getElementById("ins-summary");
   if (summaryEl) {
     if (evalRes.ok) {
-      summaryEl.textContent = `Single-pass zero-copy scan verified ${builderState.tensors.length} input tensor(s) in ${evalRes.metadataBytes} B of metadata and jumped over ${evalRes.skippedBulkBytes.toLocaleString()} B of Field 7 bulk tensor data in O(1).`;
+      summaryEl.textContent = hasBytesInput
+        ? `Allowed: all ${builderState.tensors.length} input${builderState.tensors.length === 1 ? "" : "s"} pass validation. Custos checks each BYTES length prefix; it skips over fixed-width tensor values without reading each one.`
+        : `Allowed: all ${builderState.tensors.length} input${builderState.tensors.length === 1 ? "" : "s"} have data of the expected size. Custos checks the descriptions, then skips over ${evalRes.skippedBulkBytes.toLocaleString()} bytes of tensor data.`;
     } else {
-      summaryEl.textContent = `Fail-closed admission control short-circuited the frame at the wire with ${evalRes.error} before allocating backend memory.`;
+      const failedInput = evalRes.tensorResults.findIndex((result) => !result.ok);
+      const failedResult = failedInput >= 0 ? evalRes.tensorResults[failedInput] : null;
+      summaryEl.textContent = failedResult && failedResult.actualBytes !== failedResult.expectedBytes
+        ? `Blocked: input ${failedInput + 1} expects ${failedResult.expectedBytes.toLocaleString()} bytes, but its data has ${failedResult.actualBytes.toLocaleString()} bytes.`
+        : `Blocked: this request fails a safety check (${evalRes.error}). Open Technical readout for the scanner detail.`;
     }
   }
 
@@ -3239,7 +3265,7 @@ function renderBuilderSummaryAndConnectors() {
   const totalB = Math.max(1, evalRes.totalWireBytes);
   const scannedPctReal = (evalRes.metadataBytes / totalB) * 100;
   const skippedPctReal = (evalRes.skippedBulkBytes / totalB) * 100;
-  // Keep scanned segment visually legible (between 12% and 88% when both > 0)
+  // Enlarge the metadata slice for legibility; the UI labels this bar as illustrative.
   const visualScannedPct =
     evalRes.skippedBulkBytes === 0
       ? 100
@@ -3258,23 +3284,25 @@ function renderBuilderSummaryAndConnectors() {
 
   const scannedShort = document.getElementById("anatomy-scanned-short");
   if (scannedShort) {
-    scannedShort.textContent = `${evalRes.metadataBytes} B Scanned (${fmtPct(scannedPctReal)})`;
+    scannedShort.textContent = `${evalRes.metadataBytes} B metadata checked`;
   }
   const skippedShort = document.getElementById("anatomy-skipped-short");
   if (skippedShort) {
     skippedShort.textContent =
       evalRes.skippedBulkBytes > 0
-        ? `O(1) Cursor Jump: ${evalRes.skippedBulkBytes.toLocaleString()} B (${fmtPctHigh(skippedPctReal)})`
-        : "0 B Bulk Tensor";
+        ? hasBytesInput ? `${evalRes.skippedBulkBytes.toLocaleString()} B input data` : `${evalRes.skippedBulkBytes.toLocaleString()} B data skipped`
+        : "No tensor data";
   }
 
   const scannedText = document.getElementById("anatomy-scanned-text");
   if (scannedText) {
-    scannedText.textContent = `${evalRes.metadataBytes.toLocaleString()} B inspected (${fmtPct(scannedPctReal)})`;
+    scannedText.textContent = `${evalRes.metadataBytes.toLocaleString()} bytes checked (${fmtPct(scannedPctReal)})`;
   }
   const skippedText = document.getElementById("anatomy-skipped-text");
   if (skippedText) {
-    skippedText.textContent = `${evalRes.skippedBulkBytes.toLocaleString()} B skipped in O(1) (${fmtPctHigh(skippedPctReal)})`;
+    skippedText.textContent = hasBytesInput
+      ? `${evalRes.skippedBulkBytes.toLocaleString()} bytes of input data`
+      : `${evalRes.skippedBulkBytes.toLocaleString()} bytes skipped (${fmtPctHigh(skippedPctReal)})`;
   }
 
   // Update 6-Cell Scanner Verdict Grid
@@ -3325,14 +3353,14 @@ function renderBuilderHexSegments(evalRes) {
     {
       kind: "grpc",
       bytes: `00 ${(evalRes.totalWireBytes - 5).toString(16).padStart(8, "0").toUpperCase().replace(/(..)/g, "$1 ").trim()}`,
-      label: "gRPC 5B Frame Header",
+      label: "Request frame header (5 bytes)",
       offset: "0x00..0x05",
       detail: `Compressed-Flag = 0x00 (uncompressed); big-endian u32 declared length = ${(evalRes.totalWireBytes - 5).toLocaleString()} bytes.`
     },
     {
       kind: builderState.nestingDepth > MAX_NESTING_DEPTH ? "exploit" : "tag",
       bytes: `0A 08 72 65 73 6E 65 74 35 30`,
-      label: `Field 1 model_name (D=${builderState.nestingDepth})`,
+      label: `Request metadata (nesting ${builderState.nestingDepth})`,
       offset: "0x05..0x0F",
       detail:
         builderState.nestingDepth > MAX_NESTING_DEPTH
@@ -3346,11 +3374,11 @@ function renderBuilderHexSegments(evalRes) {
     segments.push({
       kind: res.ok ? "shape" : "exploit",
       bytes: t.injectShm ? `2A .. 73 68 61 72 65 64 5F 6D 65 6D` : `2A 1C 12 ${t.datatype} 1A [${t.shapeStr}]`,
-      label: `Field 5 Input #${i} (${t.datatype} [${t.shapeStr}])`,
+      label: `Input #${i + 1}: ${t.datatype} [${t.shapeStr}]`,
       offset: `Input[${i}]`,
       detail: res.ok
-        ? `Validated Input #${i}: datatype=${t.datatype}, shape=[${t.shapeStr}] -> ${res.elements.toLocaleString()} elements (${res.expectedBytes.toLocaleString()} B expected).`
-        : `REJECTED at Input #${i}: ${res.error} (${res.reason}).`
+        ? `Input ${i + 1} is valid: ${t.datatype}, shape [${t.shapeStr}], ${res.elements.toLocaleString()} elements; expected data size ${res.expectedBytes.toLocaleString()} bytes.`
+        : `Input ${i + 1} was blocked: ${res.error} (${res.reason}).`
     });
   });
 
@@ -3360,11 +3388,13 @@ function renderBuilderHexSegments(evalRes) {
     segments.push({
       kind: ok ? "skip" : "exploit",
       bytes: `3A [${c.byteLength.toLocaleString()} B raw_input_contents]`,
-      label: `Field 7 Chunk #${i} (${c.byteLength.toLocaleString()} B)`,
+      label: `Input data #${i + 1} (${c.byteLength.toLocaleString()} bytes)`,
       offset: `Chunk[${i}]`,
       detail: ok
-        ? `1-to-1 Positional Parity Verified (Chunk #${i} == ${c.byteLength.toLocaleString()} B). Slice cursor jumps +${c.byteLength.toLocaleString()} B in O(1) without parsing float bytes.`
-        : `REJECTED at Field 7 Chunk #${i}: ${res ? res.error : "Unbound extra raw_input_contents chunk"}.`
+        ? builderState.tensors[i]?.datatype === "BYTES"
+          ? `Data for input ${i + 1} is valid. Custos checks each 4-byte length prefix to confirm the string data fits.`
+          : `Data for input ${i + 1} matches its expected size (${c.byteLength.toLocaleString()} bytes). Custos jumps over these bytes without reading each value.`
+        : `Data for input ${i + 1} was blocked: ${res ? res.error : "No matching input description for this data"}.`
     });
   });
 
@@ -3383,14 +3413,31 @@ function renderBuilderHexSegments(evalRes) {
     const el = document.createElement("div");
     el.className = `hex-segment ${idx === segments.length - 1 ? "selected" : ""}`;
     el.dataset.kind = seg.kind;
-    el.innerHTML = `
-      <span class="hex-bytes mono">${seg.bytes}</span>
-      <span class="hex-caption">${seg.label} (${seg.offset})</span>
-    `;
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    el.setAttribute("aria-label", `Show details for ${seg.label}`);
+    el.setAttribute("aria-pressed", String(idx === segments.length - 1));
+    const bytesEl = document.createElement("span");
+    bytesEl.className = "hex-bytes mono";
+    bytesEl.textContent = seg.bytes;
+    const captionEl = document.createElement("span");
+    captionEl.className = "hex-caption";
+    captionEl.textContent = seg.label;
+    el.append(bytesEl, captionEl);
     el.addEventListener("click", () => {
-      stream.querySelectorAll(".hex-segment").forEach((s) => s.classList.remove("selected"));
+      stream.querySelectorAll(".hex-segment").forEach((s) => {
+        s.classList.remove("selected");
+        s.setAttribute("aria-pressed", "false");
+      });
       el.classList.add("selected");
+      el.setAttribute("aria-pressed", "true");
       showSegmentDetail(seg);
+    });
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        el.click();
+      }
     });
     stream.appendChild(el);
   });
@@ -3477,7 +3524,7 @@ function initWireInspector() {
         shapeStr: "1, 4",
         injectShm: false
       });
-      builderState.title = "Custom Interactive ModelInferRequest";
+      builderState.title = "Custom request";
       renderBuilderAll();
     });
   }
@@ -3490,7 +3537,7 @@ function initWireInspector() {
         byteLength: 16,
         u32Prefix: 12
       });
-      builderState.title = "Custom Interactive ModelInferRequest";
+      builderState.title = "Custom request";
       renderBuilderAll();
     });
   }
@@ -3533,11 +3580,19 @@ function initWireInspector() {
 function showSegmentDetail(seg) {
   const box = document.getElementById("segment-detail");
   if (!box) return;
-  box.innerHTML = `
-    <strong>${seg.label}</strong> <span class="mono offset">[${seg.offset}]</span> —
-    <code class="mono">${seg.bytes}</code><br/>
-    <span class="detail-text">${seg.detail}</span>
-  `;
+  box.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = seg.label;
+  const offset = document.createElement("span");
+  offset.className = "mono offset";
+  offset.textContent = ` · ${seg.offset}`;
+  const bytes = document.createElement("code");
+  bytes.className = "mono segment-bytes";
+  bytes.textContent = seg.bytes;
+  const detail = document.createElement("span");
+  detail.className = "detail-text";
+  detail.textContent = seg.detail;
+  box.append(heading, offset, document.createTextNode(" — "), bytes, document.createElement("br"), detail);
   emit("custos:segmentrendered", { seg });
 }
 

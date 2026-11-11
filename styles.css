@@ -1137,18 +1137,19 @@ code {
 }
 
 .ins-summary {
-  font-size: 0.88rem;
-  color: var(--ctp-subtext1);
-  margin-top: 0.35rem;
+  max-width: 68ch;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ctp-text);
+  margin-top: 0.5rem;
 }
 
 .stream-label {
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--ctp-overlay1);
   margin-bottom: 0.45rem;
   font-weight: 600;
+  line-height: 1.5;
 }
 
 .hex-stream {
@@ -1178,6 +1179,11 @@ code {
 .hex-segment:hover {
   transform: translateY(-3px) scale(1.03);
   box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--ring-color) 90%, transparent);
+}
+
+.hex-segment:focus-visible {
+  outline: 2px solid var(--ctp-blue);
+  outline-offset: 3px;
 }
 
 .hex-segment.selected {
@@ -1732,6 +1738,69 @@ tr:last-child td {
   gap: 1.35rem;
 }
 
+.inspector-howto {
+  padding: 1rem 1.15rem;
+  background: color-mix(in srgb, var(--ctp-blue) 7%, var(--ctp-crust));
+  border: 1px solid color-mix(in srgb, var(--ctp-blue) 35%, var(--ctp-surface0));
+  border-radius: var(--r-md);
+  color: var(--ctp-text);
+  font-size: 0.88rem;
+}
+
+.inspector-howto ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 2rem;
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+  color: var(--ctp-subtext1);
+}
+
+.inspector-howto p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  color: var(--ctp-subtext0);
+  font-size: 0.78rem;
+}
+
+.inspector-key {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.4rem;
+  border-radius: 3px;
+}
+
+.inspector-key.is-check { background: var(--ctp-blue); }
+.inspector-key.is-skip { background: var(--ctp-surface1); border: 1px solid var(--ctp-overlay0); }
+.inspector-key.is-block { background: var(--ctp-red); }
+
+.technical-details {
+  padding: 0.9rem 1rem;
+  background: var(--ctp-crust);
+  border: 1px solid var(--ctp-surface0);
+  border-radius: var(--r-md);
+}
+
+.technical-details > summary {
+  color: var(--ctp-subtext1);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.technical-details[open] > summary {
+  margin-bottom: 0.85rem;
+  color: var(--ctp-text);
+}
+
+.technical-details > .stress-controls-bar,
+.technical-details > .scanner-verdict-grid { margin-top: 0.85rem; }
+.technical-details > .stress-controls-bar { margin-top: 0; }
+
 .preset-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1963,6 +2032,13 @@ tr:last-child td {
 .anatomy-legend-item span {
   color: var(--ctp-subtext0);
   font-size: 0.74rem;
+}
+
+.anatomy-scale-note {
+  margin: -0.3rem 0 0;
+  color: var(--ctp-subtext0);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .anatomy-swatch {
