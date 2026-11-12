@@ -2353,6 +2353,13 @@ tr:last-child td {
   margin-bottom: 0.65rem;
 }
 
+.graphic-note {
+  margin: 0 0 0.75rem;
+  color: var(--ctp-subtext1);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 /* 5-Group Traffic-Light Oracle Matrix */
 .trials-table {
   font-size: 0.8rem;

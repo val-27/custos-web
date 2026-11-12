@@ -94,19 +94,19 @@
       <div class="stat-strip">
         <div class="stat-card reveal">
           <div class="stat-value mono">0 B</div>
-          <div class="stat-label">Core Scanner Heap Allocations (<code>#![no_std]</code>)</div>
+          <div class="stat-label">Extra memory used by scanner</div>
         </div>
         <div class="stat-card reveal">
-          <div class="stat-value mono">O(1)</div>
-          <div class="stat-label">Bulk Tensor Slice Skip (<code>Field 7</code>)</div>
+          <div class="stat-value mono">Skipped</div>
+          <div class="stat-label">Large input data</div>
         </div>
         <div class="stat-card reveal">
           <div class="stat-value mono">16 Levels</div>
-          <div class="stat-label">Maximum Message Nesting Depth Allowed</div>
+          <div class="stat-label">Maximum layers in a request</div>
         </div>
         <div class="stat-card reveal">
-          <div class="stat-value mono">0 Caps</div>
-          <div class="stat-label">Special System Permissions Needed</div>
+          <div class="stat-value mono">None</div>
+          <div class="stat-label">Extra system permissions needed</div>
         </div>
       </div>
     </section>
@@ -529,17 +529,17 @@
     <!-- Section 3: Topology Setup Guide -->
     <section id="topologies" class="section">
       <div class="section-header reveal">
-        <span class="section-tag mono">03 / Architecture &amp; Experimental Design</span>
-        <h2 class="section-title">Production &amp; Baseline Evaluation Architectures</h2>
+        <span class="section-tag mono">03 / Where requests go</span>
+        <h2 class="section-title">Request paths</h2>
         <p class="section-desc">
-          We tested three different setups to see how much Custos slows things down. One with Custos, one without it but with the reverse proxy, and one with direct access to the AI server. This lets us measure how much protection costs.
+          These diagrams show where a request goes. Follow the arrows. Select a tab to compare the three paths.
         </p>
       </div>
 
       <div class="tabs-header reveal">
-        <button class="tab-btn active" data-topo="prod" type="button">Custos Production (Gateway + Sidecar)</button>
-        <button class="tab-btn" data-topo="baseline" type="button">Proxy Baseline (Envoy Only)</button>
-        <button class="tab-btn" data-topo="control" type="button">Unprotected Control (Direct Triton)</button>
+        <button class="tab-btn active" data-topo="prod" type="button">With Custos</button>
+        <button class="tab-btn" data-topo="baseline" type="button">Proxy only</button>
+        <button class="tab-btn" data-topo="control" type="button">No protection</button>
       </div>
 
       <div class="topology-stage reveal">
@@ -548,6 +548,7 @@
           <span id="topo-badge" class="badge badge-green">Production Protected</span>
         </div>
         <p id="topo-summary" class="topo-summary"></p>
+        <p class="graphic-note">The arrows show the order of each step. The green box marks Custos. Red marks a server that has no Custos check.</p>
 
         <div id="topo-flow" class="flow-diagram"></div>
 
@@ -558,10 +559,10 @@
     <!-- Section 4: Benchmark Telemetry Dashboard -->
     <section id="telemetry" class="section">
       <div class="section-header reveal">
-        <span class="section-tag mono">04 / Empirical Evaluation &amp; Telemetry</span>
-        <h2 class="section-title">System Performance &amp; Survivability Dashboard</h2>
+        <span class="section-tag mono">04 / Test results</span>
+        <h2 class="section-title">How the three setups performed</h2>
         <p class="section-desc">
-          Empirical multi-trial (`N=5`) measurements from <code>Custos-Bench</code> across all benign payload families—fixed-width <code>ResNet-50 FP32</code> tensors, variable-width <code>BYTES [1, 2]</code> string tensors, and <code>D=15..16</code> boundary-nested submessages—tested alongside all 33 adversarial <code>.pb</code> exploit payloads and a 59-payload <code>oracle-sweep</code> (<code>39/39</code> rejects blocked, <code>20/20</code> benign allowed).
+          These charts compare response times and completed requests. Choose a test group to update the charts and table.
         </p>
       </div>
 
@@ -569,32 +570,32 @@
       <div class="grid-2" style="margin-bottom: 1.75rem;">
         <div class="chart-box reveal">
           <div class="chart-title-row">
-            <h4>Log-Scale Tail-Latency CDF — <code>C=500</code> Burst Survivability</h4>
-            <span class="badge badge-green mono">3.4× Lower P99 Tail</span>
+            <h4>Response time during a large attack burst</h4>
+            <span class="badge badge-green mono">3.4× faster for slow replies</span>
           </div>
           <p class="chart-lead">
-            During the <code>C=500</code> concurrent saturating-burst attack (90% Attack / 10% Benign), Unprotected Control and Proxy Baseline stall at <strong>511.3 ms</strong> and <strong>518.0 ms</strong> P99, while Custos Production keeps legitimate traffic at <strong>153.0 ms P99</strong> (<code>250/250 OK</code>).
+            This chart compares how long normal requests take during a burst of attack requests. Lower points mean faster replies. For the slowest 1 in 100 requests, Custos replies in 153 ms. The other setups take about 511 to 518 ms.
           </p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Control (511.3 ms P99)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Baseline (518.0 ms P99)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos (153.0 ms P99)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection (511 ms)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only (518 ms)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>With Custos (153 ms)</span>
           </div>
           <svg id="burst-cdf-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
 
         <div class="chart-box reveal">
           <div class="chart-title-row">
-            <h4>O(1) Batch Scaling vs. O(N) Linear Parser (<code>B=1..B=16</code>)</h4>
-            <span class="badge badge-mauve mono">63 B Scanned at 9.63 MB</span>
+            <h4>Time to check requests as image size grows</h4>
+            <span class="badge badge-mauve mono">Checks 63 bytes in a 9.63 MB request</span>
           </div>
           <p class="chart-lead">
-            Compares the constant wire-scanner overhead of <code>custos-core</code> (which jumps over Field 7 tensor buffers in O(1)) against an O(N) linear parser across ResNet-50 batch sizes <code>B=1</code> (<code>602 KB</code>) through <code>B=16</code> (<code>9.63 MB</code>).
+            The labels below show image size. The labels on the left show check time. µs means microseconds. The green line stays almost flat as the image gets larger. The red line rises because it reads all the data.
           </p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span><code>custos-core</code> O(1) Scan (~14 µs flat)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>O(N) Full-Byte Linear Parser</span>
-            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Envoy UDS Serialization Delta</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos check time</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Time to read all data</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Time to move data through proxy</span>
           </div>
           <svg id="batch-scaling-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
@@ -602,33 +603,35 @@
 
       <div class="dashboard-controls reveal">
          <div class="control-group">
-           <span class="control-label">Regime Explorer:</span>
-           <button class="tab-btn active" data-regime="interleaved" type="button">94% Benign / 6% Attack (Interleaved)</button>
-           <button class="tab-btn" data-regime="steady-benign" type="button">100% Steady Benign (FP32, BYTES &amp; Mixed)</button>
-           <button class="tab-btn" data-regime="saturating-burst" type="button">Saturating Burst (C=500 Fan-Out: 90% Attack / 10% Benign)</button>
-           <button class="tab-btn" data-regime="all" type="button">All Regimes</button>
+           <span class="control-label">Choose a test group:</span>
+           <button class="tab-btn active" data-regime="interleaved" type="button">Mixed traffic (94% normal, 6% attacks)</button>
+           <button class="tab-btn" data-regime="steady-benign" type="button">Normal requests only</button>
+           <button class="tab-btn" data-regime="saturating-burst" type="button">Attack burst (90% attacks, 10% normal)</button>
+           <button class="tab-btn" data-regime="all" type="button">All test groups</button>
          </div>
        </div>
 
       <div class="grid-2" style="margin-bottom: 1.5rem;">
         <div class="chart-box reveal">
-          <h4>Coordinated-Omission Latency CDF (P50 – P99.99, Log Scale)</h4>
+          <h4>Response time by request percentile</h4>
+          <p class="chart-lead">Each point shows the response time for part of the requests. P50 is the middle request. P99 shows the slowest 1 in 100. Lower points mean faster replies.</p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Unprotected Control</span>
-            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy Baseline</span>
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos Production</span>
-            <span class="chart-hint mono">• Hover any dot for tag</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>With Custos</span>
+            <span class="chart-hint mono">Point to a dot for details</span>
           </div>
           <svg id="latency-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
 
         <div class="chart-box reveal">
-          <h4>Achieved Goodput (Requests / sec)</h4>
+          <h4>Requests completed each second</h4>
+          <p class="chart-lead">Each bar shows how many requests a setup completed each second. Taller bars mean more requests were completed. Point to a bar for the exact number.</p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>Control</span>
-            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Baseline</span>
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos</span>
-            <span class="chart-hint mono">• Hover any bar for tag</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>With Custos</span>
+            <span class="chart-hint mono">Point to a bar for details</span>
           </div>
           <svg id="throughput-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
@@ -636,20 +639,21 @@
       <div id="chart-tooltip" class="chart-tooltip" role="status" aria-live="polite" hidden></div>
 
       <div class="table-wrap reveal">
+        <p class="graphic-note">This table shows exact results for the selected test group. P50 is the middle response time. P99 is the time for the slowest 1 in 100 requests. P99.99 is the time for the slowest 1 in 10,000. RPS means requests each second. ms means milliseconds.</p>
         <table class="trials-table">
           <thead>
             <tr>
               <th>Architecture</th>
               <th>Regime</th>
               <th>Benign Profile</th>
-              <th>Achieved / Offered</th>
+              <th>Completed / sent per second</th>
               <th>P50</th>
               <th>P99</th>
               <th>P99.99</th>
-              <th>FPR</th>
-              <th>TP Drop</th>
-              <th title="Total Peak RSS across the data path (Triton + Envoy + Sidecar)">Peak RSS</th>
-              <th>Server Survival</th>
+              <th title="Percent of normal requests blocked by mistake">Normal requests blocked</th>
+              <th title="Percent of attack requests blocked">Attacks blocked</th>
+              <th title="Peak memory used while the test ran">Peak memory</th>
+              <th>Server result</th>
             </tr>
           </thead>
           <tbody id="trials-tbody"></tbody>
@@ -658,45 +662,45 @@
 
       <!-- 59-Payload Traffic-Light Oracle Sweep Matrix -->
       <div class="section-header reveal" style="margin-top: 3rem;">
-        <span class="section-tag mono">05 / Deterministic Corpus Verification (--regime oracle-sweep)</span>
-        <h3 class="section-title" style="font-size: 1.45rem;">59-Payload Traffic-Light Oracle Matrix</h3>
+        <span class="section-tag mono">05 / Request safety checks</span>
+        <h3 class="section-title" style="font-size: 1.45rem;">Results for 59 test requests</h3>
         <p class="section-desc">
-          Grouped verification of all <strong>59</strong> deterministic corpus payloads in <code>corpus/manifest.json</code> across five threat &amp; boundary families. Click any group row to expand or collapse its individual wire payloads.
+          Each row shows one request group. Green means the setup gave the expected result. Red means it did not. Select a row to see the requests in that group.
         </p>
       </div>
 
       <div class="grid-3" style="margin-bottom: 1.25rem;">
         <div class="card reveal">
           <h3>
-            <span>Custos Production (:30803)</span>
-            <span class="badge badge-green">59 / 59 Matched</span>
+            <span>With Custos</span>
+            <span class="badge badge-green">59 / 59 correct</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-green);">
-            ✓ 20 / 20 Benign &amp; Boundary Admitted (0% FPR)<br/>
-            ✓ 39 / 39 Exploits &amp; Probes Blocked (100% TP)<br/>
-            ✓ 0 Backend INTERNAL Faults • 0 Misses
+            ✓ Allowed all 20 normal requests<br/>
+            ✓ Blocked all 39 attack requests<br/>
+            ✓ No server errors or missed attacks
           </p>
         </div>
         <div class="card reveal">
           <h3>
-            <span>Proxy Baseline (:30802)</span>
-            <span class="badge badge-blue">20 / 59 Matched</span>
+            <span>Proxy only</span>
+            <span class="badge badge-blue">20 / 59 correct</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
-            ✓ 20 / 20 Benign &amp; Boundary Admitted<br/>
-            ✕ 0 / 39 Exploits &amp; Probes Blocked (39 Misses)<br/>
-            ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
+            ✓ Allowed all 20 normal requests<br/>
+            ✕ Did not block any of the 39 attacks<br/>
+            ✕ 33 server errors and 6 missed checks
           </p>
         </div>
         <div class="card reveal">
           <h3>
-            <span>Unprotected Control (:30801)</span>
-            <span class="badge badge-red">20 / 59 Matched</span>
+            <span>No protection</span>
+            <span class="badge badge-red">20 / 59 correct</span>
           </h3>
           <p class="mono" style="margin-top: 0.4rem; color: var(--ctp-subtext0);">
-            ✓ 20 / 20 Benign &amp; Boundary Admitted<br/>
-            ✕ 0 / 39 Exploits &amp; Probes Blocked (39 Misses)<br/>
-            ✕ 33 Backend INTERNAL Faults + 6 Framing/RPC Misses
+            ✓ Allowed all 20 normal requests<br/>
+            ✕ Did not block any of the 39 attacks<br/>
+            ✕ 33 server errors and 6 missed checks
           </p>
         </div>
       </div>
@@ -705,11 +709,11 @@
         <table class="traffic-light-table">
           <thead>
             <tr>
-              <th>Corpus Group (59 Payloads)</th>
-              <th>Custos Production</th>
-              <th>Proxy Baseline</th>
-              <th>Unprotected Control</th>
-              <th>Defense Invariant</th>
+              <th>Test group</th>
+              <th>With Custos</th>
+              <th>Proxy only</th>
+              <th>No protection</th>
+              <th>What Custos checks</th>
             </tr>
           </thead>
           <tbody id="oracle-tbody"></tbody>

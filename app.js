@@ -885,34 +885,34 @@ const WIRE_PAYLOADS = [
 
 const TOPOLOGIES = {
   prod: {
-    title: "Custos Production — Envoy Ingress Gateway + custos-proc Native Sidecar",
+    title: "With Custos",
     badge: "Production Protected",
     badgeClass: "badge-green",
     summary:
-      "The Custos setup with protection: Envoy reassembles incoming HTTP/2 gRPC streams (capped at 16 MiB) and passes the buffered frame over a shared Unix Domain Socket to custos-proc. Custos rejects malformed wire messages before they reach the inference server.",
+      "Envoy sends each request to Custos. Custos checks it. Safe requests go to the AI server. Custos blocks requests that fail the check.",
     nodes: [
       {
-        title: "gRPC Inference Client",
-        meta: "custos-bench • RawCodec",
-        desc: "Downstream callers or open-loop load generator transmitting KServe v2 tensors & wire exploits.",
+        title: "Request sender",
+        meta: "Test client",
+        desc: "Sends normal requests and test attacks.",
         cls: ""
       },
       {
-        title: "Gateway: Envoy Proxy",
-        meta: "Port :8003 (NodePort :30803) • UID 10001",
-        desc: "Demultiplexes HTTP/2, enforces empty-frame limits, buffers body (16 MiB cap), fail-closed (250 ms ext_proc deadline).",
+        title: "Envoy gateway",
+        meta: "Request gateway",
+        desc: "Receives each request and sends it to Custos for a check.",
         cls: ""
       },
       {
-        title: "Sidecar: custos-proc",
-        meta: "RAM UDS 0660 • drop: [ALL]",
-        desc: "Zero-allocation #![no_std] TLV wire scanner & RPC allowlist. Drops 33/33 .pb exploit payloads (and 39/39 oracle rejects) before backend deserialization.",
+        title: "Custos checker",
+        meta: "Request safety check",
+        desc: "Checks each request. Blocks unsafe requests and sends safe requests to the AI server.",
         cls: "highlight-custos"
       },
       {
-        title: "KServe v2 Backend (tritonserver)",
-        meta: "Upstream :9001 • worker-1 CPU Node",
-        desc: "32-worker KServe v2 gRPC backend (triton_sim.rs). Only receives structurally verified KServe v2 requests.",
+        title: "AI server",
+        meta: "Model server",
+        desc: "Receives requests that pass the check and runs the model.",
         cls: ""
       }
     ],
@@ -924,28 +924,28 @@ const TOPOLOGIES = {
     ]
   },
   baseline: {
-    title: "Proxy Baseline — Hardened Envoy HTTP/2 Ingress (No Custos Sidecar)",
+    title: "Proxy only",
     badge: "Proxy Baseline",
     badgeClass: "badge-blue",
     summary:
-      "The hardened proxy baseline: Identical Envoy HTTP/2 configuration (16 MiB buffer filter, access log, 15s/30s timeouts, HTTP/2 empty-frame protections) with only the ext_proc filter removed. Isolates the exact cost and security impact of the custos-proc sidecar.",
+      "Envoy sends each request straight to the AI server. It does not check the request data. This setup shows what happens without Custos.",
     nodes: [
       {
-        title: "gRPC Inference Client",
-        meta: "custos-bench • RawCodec",
-        desc: "Fires steady-benign, 94%/6% interleaved (all 33 .pb exploits), C=500 burst, and 59-case oracle-sweep regimes.",
+        title: "Request sender",
+        meta: "Test client",
+        desc: "Sends normal requests and test attacks.",
         cls: ""
       },
       {
-        title: "Envoy Proxy (No Sidecar)",
-        meta: "Port :8002 (NodePort :30802) • Buffer + Router",
-        desc: "Identical HTTP/2 & 16 MiB buffer config without ext_proc. Blind to inner Protobuf TLV semantics.",
+        title: "Envoy gateway",
+        meta: "Proxy only",
+        desc: "Forwards each request. Does not check the request data.",
         cls: ""
       },
       {
-        title: "KServe v2 Backend (tritonserver)",
-        meta: "Upstream :9001 • Exposed",
-        desc: "Exposed to nesting bombs, 64-bit shape overflows, parity mismatches, and varint hangs.",
+        title: "AI server",
+        meta: "No Custos check",
+        desc: "Receives requests, including unsafe requests that the proxy does not detect.",
         cls: "highlight-danger"
       }
     ],
@@ -957,22 +957,22 @@ const TOPOLOGIES = {
     ]
   },
   control: {
-    title: "Unprotected Control — Direct KServe v2 gRPC Backend",
+    title: "No protection",
     badge: "Unprotected Control",
     badgeClass: "badge-red",
     summary:
-      "The unprotected control group: Requests go straight to the KServe v2 gRPC listener (NodePort :30801 in the LAN testbed) without Envoy or Custos. Establishes the raw backend latency floor and unprotected failure behavior.",
+      "Requests go straight to the AI server. They do not pass through Envoy or Custos.",
     nodes: [
       {
-        title: "gRPC Inference Client",
-        meta: "custos-bench • RawCodec",
-        desc: "Sends raw KServe v2 gRPC frames directly to the backend gRPC service.",
+        title: "Request sender",
+        meta: "Test client",
+        desc: "Sends requests straight to the AI server.",
         cls: ""
       },
       {
-        title: "KServe v2 Backend (tritonserver)",
-        meta: "Port :9001 (NodePort :30801) • Direct",
-        desc: "Directly parses untrusted Protobuf wire bytes on 32 backend worker slots.",
+        title: "AI server",
+        meta: "Direct connection",
+        desc: "Receives requests with no safety check before they arrive.",
         cls: "highlight-danger"
       }
     ],
@@ -3792,11 +3792,11 @@ function renderBatchScalingSvg() {
   const crustColor = styles.getPropertyValue("--ctp-crust").trim();
 
   const batches = [
-    { b: "B=1", kb: "602 KB", bytes: 602112, custosMs: 0.014, linearMs: 0.62, udsDeltaMs: 1.08 },
-    { b: "B=2", kb: "1.20 MB", bytes: 1204224, custosMs: 0.014, linearMs: 1.24, udsDeltaMs: 2.98 },
-    { b: "B=4", kb: "2.41 MB", bytes: 2408448, custosMs: 0.015, linearMs: 2.48, udsDeltaMs: 11.99 },
-    { b: "B=8", kb: "4.82 MB", bytes: 4816896, custosMs: 0.015, linearMs: 4.96, udsDeltaMs: 16.44 },
-    { b: "B=16", kb: "9.63 MB", bytes: 9633792, custosMs: 0.015, linearMs: 9.92, udsDeltaMs: 22.13 }
+    { b: "1 image", kb: "602 KB", bytes: 602112, custosMs: 0.014, linearMs: 0.62, udsDeltaMs: 1.08 },
+    { b: "2 images", kb: "1.20 MB", bytes: 1204224, custosMs: 0.014, linearMs: 1.24, udsDeltaMs: 2.98 },
+    { b: "4 images", kb: "2.41 MB", bytes: 2408448, custosMs: 0.015, linearMs: 2.48, udsDeltaMs: 11.99 },
+    { b: "8 images", kb: "4.82 MB", bytes: 4816896, custosMs: 0.015, linearMs: 4.96, udsDeltaMs: 16.44 },
+    { b: "16 images", kb: "9.63 MB", bytes: 9633792, custosMs: 0.015, linearMs: 9.92, udsDeltaMs: 22.13 }
   ];
 
   const W = 540;
@@ -3848,11 +3848,11 @@ function renderBatchScalingSvg() {
   const custosPts = batches.map((d, i) => `${xFor(i)},${yFor(d.custosMs)}`).join(" ");
   out += `<polyline fill="none" stroke="${greenColor}" stroke-width="3" points="${custosPts}" />`;
 
-  // Annotation badge on the flat O(1) line
+  // Mark the small amount of request data that Custos checks.
   const midX = xFor(2);
   const flatY = yFor(0.015);
   out += `<rect x="${midX - 96}" y="${flatY - 26}" width="192" height="20" rx="10" fill="${crustColor}" stroke="${greenColor}" stroke-width="1.5" />`;
-  out += `<text x="${midX}" y="${flatY - 13}" fill="${greenColor}" font-size="9" font-weight="700" text-anchor="middle">O(1) Cursor Jump: 63 B Scanned (~14 µs)</text>`;
+  out += `<text x="${midX}" y="${flatY - 13}" fill="${greenColor}" font-size="9" font-weight="700" text-anchor="middle">Custos checks 63 bytes</text>`;
 
   batches.forEach((d, i) => {
     const x = xFor(i);
@@ -3875,16 +3875,16 @@ function renderBatchScalingSvg() {
       const color = kind === "custos" ? greenColor : kind === "uds" ? blueColor : redColor;
       const title =
         kind === "custos"
-          ? "custos-core O(1) Wire Scanner"
+          ? "Custos check time"
           : kind === "uds"
-            ? "Envoy UDS Buffer Transfer Delta"
-            : "O(N) Full-Byte Linear Parser";
+            ? "Time to move data through proxy"
+            : "Time to read all data";
       const valText =
         kind === "custos"
-          ? `${(item.custosMs * 1000).toFixed(0)} µs (63 B inspected)`
+          ? `${(item.custosMs * 1000).toFixed(0)} microseconds (63 bytes checked)`
           : kind === "uds"
-            ? `+${item.udsDeltaMs.toFixed(2)} ms (UDS socket copy)`
-            : `${item.linearMs.toFixed(2)} ms (${item.bytes.toLocaleString()} B touched)`;
+            ? `${item.udsDeltaMs.toFixed(2)} milliseconds`
+            : `${item.linearMs.toFixed(2)} milliseconds (${item.bytes.toLocaleString()} bytes read)`;
 
       tip.style.setProperty("--tooltip-accent", color);
       tip.innerHTML = `
@@ -3897,11 +3897,11 @@ function renderBatchScalingSvg() {
         </div>
         <div class="chart-tooltip-primary mono">${valText}</div>
         <div class="chart-tooltip-grid mono">
-          <span>Metadata Scanned: <strong>63 B</strong></span>
-          <span>O(1) Skipped: <strong>${item.bytes.toLocaleString()} B</strong></span>
+          <span>Request details checked: <strong>63 bytes</strong></span>
+          <span>Request data: <strong>${item.bytes.toLocaleString()} bytes</strong></span>
         </div>
         <div class="chart-tooltip-verdict">
-          custos-core advances the slice cursor past Field 7 in O(1) without touching float32 bytes.
+          Custos checks the request details, then jumps over the image data.
         </div>
       `;
       tip.hidden = false;
@@ -3925,17 +3925,30 @@ function getTopologyColor(topology, styles) {
   return styles.getPropertyValue("--ctp-red").trim();
 }
 
+function getTopologyLabel(topology) {
+  if (topology.includes("Custos") || topology.includes("Production")) return "With Custos";
+  if (topology.includes("Baseline") || topology.includes("Envoy")) return "Proxy only";
+  return "No protection";
+}
+
+function getRegimeLabel(regime) {
+  if (regime === "steady-benign") return "Normal requests";
+  if (regime === "interleaved") return "Mixed traffic";
+  if (regime === "saturating-burst") return "Attack burst";
+  return "All test groups";
+}
+
 function getShortProfileTag(trial) {
   const prof = trial.benign_profile || "ResNet-50 B=1 (FP32)";
   const shortProf = prof.includes("BYTES Tensor")
-    ? "BYTES [1,2]"
+    ? "Text data"
     : prof.includes("Mixed")
-      ? "Mixed"
-      : "FP32 B=1";
+      ? "Mixed requests"
+      : "Image batch";
   if (trial.regime === "saturating-burst") {
-    return `${shortProf} • C=${trial.rps}`;
+    return `${shortProf} • attack burst`;
   }
-  return `${shortProf} • ${trial.rps} RPS`;
+  return `${shortProf} • ${trial.rps} requests/second`;
 }
 
 function showChartTooltip(evt, trial, color, primaryLabel, primaryValue) {
@@ -3944,11 +3957,11 @@ function showChartTooltip(evt, trial, color, primaryLabel, primaryValue) {
   const profile = trial.benign_profile || "ResNet-50 B=1 (FP32)";
   const rateDesc =
     trial.regime === "saturating-burst"
-      ? `${trial.achieved_rps.toFixed(1)} RPS (C=${trial.rps} fan-out)`
-      : `${trial.achieved_rps.toFixed(1)} / ${trial.rps} RPS`;
+      ? `${trial.achieved_rps.toFixed(1)} requests/second during attack burst`
+      : `${trial.achieved_rps.toFixed(1)} of ${trial.rps} requests/second`;
   const tpDropStr =
     trial.regime === "steady-benign" || trial.tp_drop === null || trial.tp_drop === undefined
-      ? "N/A (Benign Only)"
+      ? "Not used for normal requests only"
       : `${(Number(trial.tp_drop) * 100).toFixed(1)}%`;
 
   tip.style.setProperty("--tooltip-accent", color);
@@ -3956,9 +3969,9 @@ function showChartTooltip(evt, trial, color, primaryLabel, primaryValue) {
     <div class="chart-tooltip-head">
       <span class="chart-tooltip-arch">
         <span class="legend-dot" style="background:${color}"></span>
-        ${trial.topology}
+        ${getTopologyLabel(trial.topology)}
       </span>
-      <span class="badge badge-mauve" style="font-size:0.68rem; padding:0.12rem 0.45rem">${trial.regime}</span>
+      <span class="badge badge-mauve" style="font-size:0.68rem; padding:0.12rem 0.45rem">${getRegimeLabel(trial.regime)}</span>
     </div>
     <div class="chart-tooltip-tag mono">
       ${profile} • ${rateDesc}
@@ -3971,8 +3984,8 @@ function showChartTooltip(evt, trial, color, primaryLabel, primaryValue) {
       <span>P95: <strong>${(trial.p95_ms || trial.p90_ms).toFixed(2)} ms</strong></span>
       <span>P99: <strong>${trial.p99_ms.toFixed(2)} ms</strong></span>
       <span>P99.99: <strong>${trial.p9999_ms.toFixed(2)} ms</strong></span>
-      <span>TP Drop: <strong>${tpDropStr}</strong></span>
-      <span>Peak RSS: <strong>${trial.rss_mb.toFixed(1)} MiB</strong></span>
+      <span>Attacks blocked: <strong>${tpDropStr}</strong></span>
+      <span>Peak memory: <strong>${trial.rss_mb.toFixed(1)} MiB</strong></span>
     </div>
     <div class="chart-tooltip-verdict">
       ${trial.survival}
@@ -4235,7 +4248,7 @@ function renderThroughputSvg(trials) {
         evt,
         trial,
         color,
-        `Achieved Goodput (${getShortProfileTag(trial)})`,
+        `Requests completed per second (${getShortProfileTag(trial)})`,
         rateLabel
       );
     });
@@ -4270,8 +4283,8 @@ function renderTrialsTable(trials) {
             : `${t.achieved_rps.toFixed(1)} / ${t.rps}`;
         return `
     <tr data-series-idx="${idx}">
-      <td class="mono" style="font-weight:600">${t.topology}</td>
-      <td><span class="badge badge-mauve">${t.regime}</span></td>
+      <td class="mono" style="font-weight:600">${getTopologyLabel(t.topology)}</td>
+      <td><span class="badge badge-mauve">${getRegimeLabel(t.regime)}</span></td>
       <td class="mono" style="font-size:0.78rem; color:var(--ctp-subtext1)">${profile}</td>
       <td class="mono">${rateLabel}</td>
       <td class="mono">${t.p50_ms.toFixed(2)} ms</td>
@@ -4372,43 +4385,43 @@ function renderOracleTable() {
   const groupDefs = [
     {
       id: "benign-boundary",
-      title: "1. Benign & Boundary Payloads",
-      subtitle: "FP32 B=1..16, BYTES [1,2], Multi-Chunk, Inline Contents, Zero-Axis [1,0,224,224], D=15..16 Boundary",
+      title: "1. Normal requests and edge cases",
+      subtitle: "Valid data, large images, and requests near the size limits",
       policy: "ALLOW (200 OK)",
       policyBadge: "badge-green",
-      invariant: "O(1) Field 7 cursor jump, 4B BYTES prefix walk, D<=16 stack tracker (0% False Positive Rate)"
+      invariant: "Custos allows these requests."
     },
     {
       id: "nesting-sgroup",
-      title: "2. Nesting & SGROUP Bombs",
-      subtitle: "Deep Wire Type 2 submessages (D=17..500) & CVE-2024-7254-class Wire Type 3 SGROUP bombs",
+      title: "2. Messages that are too deep",
+      subtitle: "Messages with too many layers or unsupported message types",
       policy: "BLOCK (400 / Code 3)",
       policyBadge: "badge-red",
-      invariant: "Fixed 16-frame stack depth tracker (NestingLimitExceeded) & deprecated Wire Type 3/4 rejection"
+      invariant: "Custos blocks these requests."
     },
     {
       id: "shape-parity",
-      title: "3. Tensor Shape & Parity Overflows",
-      subtitle: "Negative axes, 64-bit wraparounds, 1B-element OOM, swapped/omitted chunks, short contents & BYTES over-reads",
+      title: "3. Wrong input sizes",
+      subtitle: "Wrong shapes, missing data, mismatched sizes, or too much data",
       policy: "BLOCK (400 / Code 3)",
       policyBadge: "badge-red",
-      invariant: "i64::checked_mul, 16.7M element ceiling & 1-to-1 per-input byte parity (PayloadSizeMismatch)"
+      invariant: "Custos checks each input against its data."
     },
     {
       id: "varints-floods",
-      title: "4. Malformed Varints & Tag Floods",
-      subtitle: "11B/64B unterminated varints, 10th-byte u64 overflow, 1,500 unknown tags & 100k packed 1s flood",
+      title: "4. Broken numbers or too many fields",
+      subtitle: "Numbers that do not end or requests with too many fields",
       policy: "BLOCK (400 / Code 3)",
       policyBadge: "badge-red",
-      invariant: "Unrolled 10-byte Base-128 varint guard & 1,024-tag scan ceiling (CVE-2022-1941-class)"
+      invariant: "Custos stops at its number and field limits."
     },
     {
       id: "rpc-framing",
-      title: "5. Admin RPC, Shared-Memory & Framing Probes",
-      subtitle: "CVE-2024-0088 shared_memory_* params, Cuda/SystemSharedMemoryRegister, ModelLoad, concat & gzip frames",
+      title: "5. Hidden settings and blocked actions",
+      subtitle: "Requests with admin actions, hidden memory settings, or bad frame data",
       policy: "BLOCK (403 / 400)",
       policyBadge: "badge-red",
-      invariant: "RequestHeaders :path allowlist (403), ParameterMapEntry shared_memory_* guard & 5B gRPC prefix check"
+      invariant: "Custos checks the request path, settings, and frame."
     }
   ];
 
