@@ -4199,6 +4199,7 @@ function renderThroughputSvg(trials) {
   const slotW = (W - padL - padR) / Math.max(trials.length, 1);
   const barW = Math.min(38, Math.max(slotW * 0.64, 6));
   const showValueLabels = trials.length <= 6;
+  const showGroupTags = activeRegimeFilter !== "steady-benign" && activeRegimeFilter !== "all";
 
   // Draw subtle vertical dividers and one shared x-axis group tag per 3-bar triad
   const triadCount = Math.floor(trials.length / 3);
@@ -4210,9 +4211,11 @@ function renderThroughputSvg(trials) {
         const divX = padL + slotW * (g * 3);
         out += `<line x1="${divX}" y1="${padT}" x2="${divX}" y2="${H - padB + 6}" stroke="${gridColor}" stroke-opacity="0.7" />`;
       }
-      const tagText = getShortProfileTag(firstInTriad);
-      const fontSize = triadCount > 4 ? 8 : 9.5;
-      out += `<text x="${triadCenter}" y="${H - 18}" fill="${textColor}" font-size="${fontSize}" font-weight="600" text-anchor="middle">${tagText}</text>`;
+      if (showGroupTags) {
+        const tagText = getShortProfileTag(firstInTriad);
+        const fontSize = triadCount > 4 ? 8 : 9.5;
+        out += `<text x="${triadCenter}" y="${H - 18}" fill="${textColor}" font-size="${fontSize}" font-weight="600" text-anchor="middle">${tagText}</text>`;
+      }
     }
   }
 
