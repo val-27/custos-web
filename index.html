@@ -566,6 +566,62 @@
         </p>
       </div>
 
+      <details class="evaluation-guide" open>
+        <summary>How we test Custos and how we know it works</summary>
+        <div class="evaluation-guide-content">
+          <p class="evaluation-guide-intro">We compare the same requests in three setups: with Custos, with the proxy only, and with no protection. We check that Custos lets normal requests through, blocks test attacks, and keeps the service working.</p>
+
+          <div class="evaluation-guide-grid">
+            <section>
+              <h3>1. Does it block unsafe requests?</h3>
+              <p>We send 39 test attacks. A good result blocks all 39. We also send 20 normal requests. A good result allows all 20. The goal is zero wrong blocks.</p>
+              <p>The safety table compares each result with the expected result. Green means it matched. Red means it did not.</p>
+            </section>
+            <section>
+              <h3>2. Does the service keep working?</h3>
+              <p>We send normal requests while attack requests arrive. We count normal replies that succeed. In the burst test, Custos served all 250 normal requests.</p>
+              <p>We also record failed requests and server errors. Fewer errors and more successful replies are better.</p>
+            </section>
+            <section>
+              <h3>3. How much time does Custos add?</h3>
+              <p>We measure the time from sending a request to getting its reply. The charts show the middle reply time and the slower replies.</p>
+              <p>We compare Custos with the proxy-only setup. This shows the extra time from the Custos check.</p>
+            </section>
+            <section>
+              <h3>4. How does the work change with data size?</h3>
+              <p>We test image requests from 1 to 16 images. The data grows from about 0.6 MB to 9.6 MB.</p>
+              <p>The green line shows Custos check time. The red line shows the time to read all data. A flat green line means the check time stayed about the same as the data grew.</p>
+            </section>
+          </div>
+
+          <div class="evaluation-method">
+            <h3>How to read the measures</h3>
+            <ul>
+              <li><strong>Response time:</strong> Time from request sent to reply received. Lower is faster.</li>
+              <li><strong>P50, P90, P95, P99, P99.9, P99.99:</strong> These show how long different shares of requests took. P50 is the middle. P99 means 99 of 100 replies arrived by that time. P99.99 means 9,999 of 10,000 arrived by that time.</li>
+              <li><strong>Requests per second:</strong> The client sets how many requests to send. The chart shows how many the setup completes. If it completes fewer, it cannot keep up.</li>
+              <li><strong>False blocks:</strong> Normal requests that Custos blocked by mistake. Zero is the goal.</li>
+              <li><strong>Attack blocks:</strong> Test attacks that Custos blocked. Blocking all test attacks is the goal.</li>
+              <li><strong>Peak memory:</strong> The most memory used by the server, proxy, and Custos during a test.</li>
+              <li><strong>Server result:</strong> Whether the server stayed healthy, slowed down, or failed during the test.</li>
+            </ul>
+          </div>
+
+          <div class="evaluation-method">
+            <h3>How the tests run</h3>
+            <ul>
+              <li><strong>Normal test:</strong> Sends valid requests only.</li>
+              <li><strong>Mixed test:</strong> Sends 94 normal requests and 6 test attacks for every 100 requests.</li>
+              <li><strong>Burst test:</strong> Runs 500 requests at the same time. 90% are test attacks. 10% are normal requests.</li>
+              <li><strong>Safety sweep:</strong> Sends each of the 59 test requests once through each setup. It checks each reply against the expected result.</li>
+            </ul>
+          </div>
+
+          <p class="evaluation-method-note">The performance tests use the same hardware and run five times. The results table shows the average. In the normal and mixed tests, the client sends requests on a set schedule, even when replies are slow. The response-time measure includes time spent waiting for a reply. This helps us see delays that a slow server could otherwise hide. The page shows saved results, not live measurements.</p>
+          <p class="evaluation-limit"><strong>How we reach the evaluation:</strong> Custos matched all 59 expected safety results. It allowed 20 normal requests and blocked 39 test attacks. During the burst test, all 250 normal requests succeeded. Their slowest 1 in 100 replies took 153 ms. The other setups took 511 to 518 ms. Custos check time stayed near 14 to 15 microseconds as image data grew from 0.6 to 9.6 MB. These results support Custos for these tests. They do not prove that every possible attack will be blocked. The tests set no single speed limit. Compare the added time with your needs.</p>
+        </div>
+      </details>
+
       <!-- Signature Survivability & O(1) Scaling Spotlight Row -->
       <div class="grid-2" style="margin-bottom: 1.75rem;">
         <div class="chart-box reveal">
@@ -574,7 +630,7 @@
             <span class="badge badge-green mono">3.4× faster for slow replies</span>
           </div>
           <p class="chart-lead">
-            This chart compares how long normal requests take during a burst of attack requests. Lower points mean faster replies. For the slowest 1 in 100 requests, Custos replies in 153 ms. The other setups take about 511 to 518 ms.
+            This chart compares how long normal requests take during a burst of attack requests. The bottom labels show how many of 100 requests have replied. The side labels show reply time. Each step up is 10 times longer. Lower points mean faster replies. For the slowest 1 in 100 requests, Custos replies in 153 ms. The other setups take about 511 to 518 ms.
           </p>
           <div class="chart-sub">
             <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection (511 ms)</span>
@@ -590,7 +646,7 @@
             <span class="badge badge-mauve mono">Checks 63 bytes in a 9.63 MB request</span>
           </div>
           <p class="chart-lead">
-            The labels below show image size. The labels on the left show check time. µs means microseconds. The green line stays almost flat as the image gets larger. The red line rises because it reads all the data.
+            The labels below show image size. The labels on the left show check time. µs means microseconds. Each step up is 10 times longer. The green line stays almost flat as the image gets larger. The red line rises because it reads all the data.
           </p>
           <div class="chart-sub">
             <span class="chart-legend-item"><span class="legend-dot is-custos"></span>Custos check time</span>
@@ -614,7 +670,7 @@
       <div class="grid-2" style="margin-bottom: 1.5rem;">
         <div class="chart-box reveal">
           <h4>Response time by request percentile</h4>
-          <p class="chart-lead">Each point shows the response time for part of the requests. P50 is the middle request. P99 shows the slowest 1 in 100. Lower points mean faster replies.</p>
+          <p class="chart-lead">Each point shows reply time for one share of the requests. The bottom labels show the share. P50 is the middle request. P99 shows the slowest 1 in 100. The side labels show reply time. Each step up is 10 times longer. Lower points mean faster replies.</p>
           <div class="chart-sub">
             <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection</span>
             <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only</span>
@@ -626,7 +682,7 @@
 
         <div class="chart-box reveal">
           <h4>Requests completed each second</h4>
-          <p class="chart-lead">Each bar shows how many requests a setup completed each second. Taller bars mean more requests were completed. Point to a bar for the exact number.</p>
+          <p class="chart-lead">Each bar shows how many requests a setup completed each second. Taller bars mean more requests were completed. The labels below show the request type or test group. Point to a bar for the exact number.</p>
           <div class="chart-sub">
             <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection</span>
             <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only</span>

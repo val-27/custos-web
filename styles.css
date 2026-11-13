@@ -2360,6 +2360,80 @@ tr:last-child td {
   line-height: 1.5;
 }
 
+.evaluation-guide {
+  margin: 1.2rem 0 1.75rem;
+  padding: 1rem 1.15rem;
+  background: var(--ctp-crust);
+  border: 1px solid var(--ctp-surface0);
+  border-radius: var(--r-md);
+}
+
+.evaluation-guide > summary {
+  color: var(--ctp-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.evaluation-guide-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  color: var(--ctp-subtext1);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.evaluation-guide-content p,
+.evaluation-guide-content h3 { margin: 0; }
+
+.evaluation-guide-intro {
+  max-width: 85ch;
+  color: var(--ctp-text);
+  font-size: 0.9rem;
+}
+
+.evaluation-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.evaluation-guide-grid section {
+  padding: 0.85rem;
+  background: var(--ctp-mantle);
+  border: 1px solid var(--ctp-surface0);
+  border-radius: var(--r-sm);
+}
+
+.evaluation-guide-grid h3,
+.evaluation-method h3 {
+  margin: 0 0 0.35rem;
+  color: var(--ctp-text);
+  font-size: 0.85rem;
+}
+
+.evaluation-guide-grid p + p { margin-top: 0.45rem; }
+
+.evaluation-method ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.4rem 1.4rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.evaluation-method-note { color: var(--ctp-subtext0); }
+
+.evaluation-limit {
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--ctp-green) 7%, var(--ctp-mantle));
+  border-left: 3px solid var(--ctp-green);
+  border-radius: var(--r-sm);
+  color: var(--ctp-text);
+}
+
 /* 5-Group Traffic-Light Oracle Matrix */
 .trials-table {
   font-size: 0.8rem;
