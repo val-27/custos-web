@@ -122,11 +122,11 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "skip",
-        bytes: "3A 48 [25 00 00 00 'classify:...' 1B 00 00 00 'model:...']",
-        label: "Field 7: 72 B Length-Prefixed Strings (ALLOW)",
+        bytes: "3A 49 [25 00 00 00 'classify:...' 1C 00 00 00 'model:...']",
+        label: "Field 7: 73 B Length-Prefixed Strings (ALLOW)",
         offset: "0x42..0x8B",
         detail:
-          "verify_bytes_chunk() walks 2 little-endian u32 prefixes (37 B + 27 B + 8 B prefixes = 72 B == raw_chunks[0].len). Admitted with 0% false positive rate."
+          "verify_bytes_chunk() walks 2 little-endian u32 prefixes (37 B + 28 B + 8 B prefixes = 73 B == raw_chunks[0].len). Admitted with 0% false positive rate."
       }
     ]
   },
@@ -146,7 +146,7 @@ const WIRE_PAYLOADS = [
     tensorElements: "4 elements (16 B packed fp32_contents)",
     skippedBytes: "42 B (O(1) cursor jump)",
     summary:
-      "A valid KServe v2 request using inline InferTensorContents (Field 5 inside InferInputTensor) instead of Root Field 7 raw_input_contents. Contains 4 packed IEEE-754 floats (16 bytes) whose bit patterns include 0xFF/0x9B bytes. Custos enters MsgContext::TensorContents, verifies 16 % 4 == 0 (4 elements == shape [4]), and skips the packed float bytes in O(1).",
+      "A valid KServe v2 request using inline InferTensorContents (Field 5 inside InferInputTensor) instead of Root Field 7 raw_input_contents. Contains 4 packed IEEE-754 floats (1.0, 2.0, 3.0, 4.0 = 16 bytes). Custos enters MsgContext::TensorContents, verifies 16 % 4 == 0 (4 elements == shape [1, 4]), and skips the packed float bytes in O(1).",
     segments: [
       {
         kind: "grpc",
@@ -157,18 +157,18 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "tag",
-        bytes: "2A 31 [0A 0C input_tensor  12 04 FP32  1A 01 04]",
-        label: "Field 5: InferInputTensor FP32 [4]",
+        bytes: "2A 32 [0A 0C input_tensor  12 04 FP32  1A 02 01 04]",
+        label: "Field 5: InferInputTensor FP32 [1, 4]",
         offset: "0x24..0x3B",
-        detail: "Declares input_tensor with datatype = 'FP32' and packed shape = [4] (4 elements expected)."
+        detail: "Declares input_tensor with datatype = 'FP32' and packed shape = [1, 4] (4 elements expected)."
       },
       {
         kind: "skip",
-        bytes: "2A 12 [32 10 FF FF FF FF 9B 06 80 3F ... (16 B)]",
+        bytes: "2A 12 [32 10 00 00 80 3F 00 00 00 40 00 00 40 40 00 00 80 40]",
         label: "InputTensor Field 5: packed fp32_contents (ALLOW)",
         offset: "0x3B..0x4F",
         detail:
-          "Tag 0x2A inside InputTensor pushes MsgContext::TensorContents. Field 6 (Tag 0x32, Wire Type 2, len 16) adds 16 / 4 = 4 elements to contents_elements and skips the float bytes in O(1) without misparsing 0xFF as Protobuf varints."
+          "Tag 0x2A inside InputTensor pushes MsgContext::TensorContents. Field 6 (Tag 0x32, Wire Type 2, len 16) adds 16 / 4 = 4 elements to contents_elements and skips the 16 float bytes in O(1)."
       }
     ]
   },
@@ -228,26 +228,26 @@ const WIRE_PAYLOADS = [
     grpcStatus: "0 (OK)",
     errorVariant: "None — Admitted (Per-Input Fixed + Variable Parity)",
     maxDepth: "1 / 16",
-    tensorElements: "Input 0: 2 FP32 (8 B) • Input 1: 2 BYTES (16 B)",
+    tensorElements: "Input 0: 4 FP32 (16 B) • Input 1: 2 BYTES (17 B)",
     skippedBytes: "66 B (O(1) cursor jump)",
     summary:
-      "A multi-input KServe v2 request combining a fixed-width FP32 [2] tensor (8 bytes) and a variable-width BYTES [2] tensor (two 4-byte length-prefixed strings = 16 bytes). Custos validates each input_specs[i] against its own raw_chunks[i] independently.",
+      "A multi-input KServe v2 request combining a fixed-width FP32 [1, 4] tensor (16 bytes) and a variable-width BYTES [1, 2] tensor ('alpha' + 'beta' with 4-byte length prefixes = 17 bytes). Custos validates each input_specs[i] against its own raw_chunks[i] independently.",
     segments: [
       {
         kind: "tag",
-        bytes: "2A 15 [in0: FP32, shape [2]]  2A 17 [in1: BYTES, shape [2]]",
-        label: "Two InferInputTensors: FP32 [2] + BYTES [2]",
-        offset: "0x24..0x54",
+        bytes: "2A 15 [in0: FP32, shape [1, 4]]  2A 17 [in1: BYTES, shape [1, 2]]",
+        label: "Two InferInputTensors: FP32 [1, 4] + BYTES [1, 2]",
+        offset: "0x24..0x51",
         detail:
-          "Records input_specs[0] = { FP32, shape_product: 2, expected: 8 B } and input_specs[1] = { BYTES, shape_product: 2 }."
+          "Records input_specs[0] = { FP32, shape_product: 4, expected_bytes: 16 } and input_specs[1] = { BYTES, shape_product: 2 }."
       },
       {
         kind: "skip",
-        bytes: "3A 08 [8 B FP32]  3A 10 [04 00 00 00 'abcd' 04 00 00 00 'efgh']",
+        bytes: "3A 10 [16 B FP32]  3A 11 [05 00 00 00 'alpha' 04 00 00 00 'beta']",
         label: "Field 7 Chunks 0 & 1 Match 1-to-1 (ALLOW)",
-        offset: "0x54..0x6E",
+        offset: "0x51..0x76",
         detail:
-          "raw_chunks[0].len == 8 matches input_specs[0], and verify_bytes_chunk(raw_chunks[1], 2) confirms two 4-byte strings cleanly partition the 16-byte chunk."
+          "raw_chunks[0].len == 16 matches input_specs[0], and verify_bytes_chunk(raw_chunks[1], 2) confirms the 5-byte ('alpha') and 4-byte ('beta') strings cleanly partition the 17-byte chunk."
       }
     ]
   },
@@ -430,7 +430,7 @@ const WIRE_PAYLOADS = [
         label: "dim[2] = -1 (10-Byte Two's Complement)",
         offset: "0x35..0x3F",
         detail:
-          "Decodes to u64::MAX, which casts to i64 = -1. accumulate_dimension() enforces dim > 0 and immediately rejects with ParseError::NegativeDimension(-1)."
+          "Decodes to u64::MAX, which casts to i64 = -1. accumulate_dimension() enforces dim >= 0 and immediately rejects with ParseError::NegativeDimension(-1)."
       }
     ]
   },
@@ -530,7 +530,7 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::PayloadSizeMismatch { expected: 2408448, actual: 64 }",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected_bytes: 2408448, actual_bytes: 64 }",
     maxDepth: "1 / 16",
     tensorElements: "602,112 elements (2,408,448 B expected)",
     skippedBytes: "90 B (O(1) jump)",
@@ -630,7 +630,7 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::TagLimitExceeded { count: 1025, max: 1024 }",
+    errorVariant: "ParseError::TagLimitExceeded { max_tags: 1024 }",
     maxDepth: "0 / 16 (Flat Flood)",
     tensorElements: "0",
     skippedBytes: "8 B",
@@ -722,7 +722,7 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::PayloadSizeMismatch { expected: 16, actual: 4 }",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected_bytes: 16, actual_bytes: 4 }",
     maxDepth: "1 / 16",
     tensorElements: "Input 0: 4 FP32 (16 B) • Input 1: 1 FP32 (4 B)",
     skippedBytes: "42 B",
@@ -758,7 +758,7 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::PayloadSizeMismatch { expected: 67108864, actual: 4 }",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected_bytes: 67108864, actual_bytes: 4 }",
     maxDepth: "2 / 16 (InputTensor -> TensorContents)",
     tensorElements: "16,777,216 declared vs 1 supplied",
     skippedBytes: "26 B",
@@ -794,12 +794,12 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::PayloadSizeMismatch { expected: 104, actual: 8 }",
+    errorVariant: "ParseError::PayloadSizeMismatch { expected_bytes: usize::MAX, actual_bytes: 8 }",
     maxDepth: "1 / 16",
-    tensorElements: "1 BYTES element (u32 len = 100 inside 8 B chunk)",
+    tensorElements: "1 BYTES element (u32 len = 0xFFFFFFFF inside 8 B chunk)",
     skippedBytes: "32 B",
     summary:
-      "Declares a 1-element BYTES tensor and supplies an 8-byte raw_input_contents chunk (>= 4 * 1 minimum bytes), but sets the 4-byte little-endian u32 length prefix inside the chunk to 100 (0x64000000). Custos decodes each 4-byte prefix inside verify_bytes_chunk() and blocks the 100-byte over-read.",
+      "Declares a 1-element BYTES tensor and supplies an 8-byte raw_input_contents chunk (>= 4 * 1 minimum bytes), but sets the 4-byte little-endian u32 length prefix inside the chunk to 0xFFFFFFFF (4,294,967,295). Custos decodes each 4-byte prefix inside verify_bytes_chunk() using checked_add() and blocks the u32 over-read.",
     segments: [
       {
         kind: "tag",
@@ -810,11 +810,11 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "exploit",
-        bytes: "3A 08 [64 00 00 00  'a' 'b' 'c' 'd'] (ABORT)",
-        label: "Field 7: u32 Prefix = 100 Inside 8 B Chunk",
+        bytes: "3A 08 [FF FF FF FF  44 44 44 44] (ABORT)",
+        label: "Field 7: u32 Prefix = 0xFFFFFFFF Inside 8 B Chunk",
         offset: "0x3E..0x48",
         detail:
-          "verify_bytes_chunk() reads little-endian u32 = 100 at offset 0. Required chunk size (4 + 100 = 104 B) exceeds actual chunk length (8 B) -> ParseError::PayloadSizeMismatch."
+          "verify_bytes_chunk() reads little-endian u32 = 0xFFFFFFFF at offset 0. pos.checked_add(elem_len) overflows or exceeds actual chunk length (8 B) -> ParseError::PayloadSizeMismatch { expected_bytes: usize::MAX, actual_bytes: 8 }."
       }
     ]
   },
@@ -829,12 +829,12 @@ const WIRE_PAYLOADS = [
     verdict: "DENY (ImmediateResponse)",
     httpStatus: "400 Bad Request",
     grpcStatus: "3 (INVALID_ARGUMENT)",
-    errorVariant: "ParseError::TagLimitExceeded { count: 1025, max: 1024 }",
+    errorVariant: "ParseError::TagLimitExceeded { max_tags: 1024 }",
     maxDepth: "1 / 16",
     tensorElements: "Product = 1 (100,000 dims of 1)",
     skippedBytes: "26 B",
     summary:
-      "Packs 100,000 dimensions of value 1 inside a single packed shape field (Tag 0x1A). Because 1^100000 == 1, the element product never exceeds max_tensor_elements. Custos counts each packed dimension varint toward max_tags_scanned (1,024) and aborts in microseconds at dimension #1,021.",
+      "Packs 100,000 dimensions of value 1 inside a single packed shape field (Tag 0x1A). Because 1^100000 == 1, the element product never exceeds max_tensor_elements. Custos counts each packed dimension varint toward max_tags_scanned (1,024) and aborts in microseconds at packed dimension #1,018 (tag #1,025).",
     segments: [
       {
         kind: "grpc",
@@ -845,11 +845,11 @@ const WIRE_PAYLOADS = [
       },
       {
         kind: "exploit",
-        bytes: "1A 90 8D 06 [01 01 01 ... x100,000 -> ABORT at #1,025]",
+        bytes: "1A 90 8D 06 [01 01 01 ... x100,000 -> ABORT at dim #1,018 / tag #1,025]",
         label: "Packed Shape Flood (Aborted at Tag/Varint #1,025)",
         offset: "0x39..0x186E1",
         detail:
-          "Inside (MsgContext::InputTensor, 3), every packed dimension varint increments report.tags_scanned. At tag #1,025, Custos aborts immediately with ParseError::TagLimitExceeded instead of scanning all 100,000 bytes."
+          "After 7 envelope tags, every packed dimension varint inside (MsgContext::InputTensor, 3) increments report.tags_scanned. At packed dimension #1,018 (tag #1,025), Custos aborts immediately with ParseError::TagLimitExceeded { max_tags: 1024 } instead of scanning all 100,000 bytes."
       }
     ]
   },
@@ -996,14 +996,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 7.18,
-    "p90_ms": 7.7,
-    "p95_ms": 7.8,
-    "p99_ms": 8.03,
-    "p999_ms": 8.18,
-    "p9999_ms": 8.18,
-    "cpu_per_1k": 65.75,
-    "rss_mb": 29.39,
+    "p50_ms": 6.91,
+    "p90_ms": 7.47,
+    "p95_ms": 7.56,
+    "p99_ms": 7.76,
+    "p999_ms": 8.15,
+    "p9999_ms": 8.15,
+    "cpu_per_1k": 67.67,
+    "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -1016,14 +1016,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.0,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 9.17,
-    "p90_ms": 9.74,
-    "p95_ms": 9.88,
-    "p99_ms": 10.1,
-    "p999_ms": 10.62,
-    "p9999_ms": 10.62,
-    "cpu_per_1k": 147.14,
-    "rss_mb": 107.3,
+    "p50_ms": 9.04,
+    "p90_ms": 9.6,
+    "p95_ms": 9.71,
+    "p99_ms": 9.93,
+    "p999_ms": 11.2,
+    "p9999_ms": 11.2,
+    "cpu_per_1k": 147.11,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1033,18 +1033,18 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "ResNet-50 B=1 (FP32)",
     "rps": 100,
-    "achieved_rps": 99.9,
+    "achieved_rps": 100.0,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 11.98,
-    "p90_ms": 12.65,
-    "p95_ms": 12.83,
-    "p99_ms": 13.12,
-    "p999_ms": 13.9,
-    "p9999_ms": 13.9,
-    "cpu_per_1k": 219.34,
-    "rss_mb": 149.79,
-    "survival": "100% Healthy (+2815 µs P50 vs Baseline)",
+    "p50_ms": 12.0,
+    "p90_ms": 12.82,
+    "p95_ms": 13.07,
+    "p99_ms": 13.61,
+    "p999_ms": 14.19,
+    "p9999_ms": 14.19,
+    "cpu_per_1k": 215.94,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+2962 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1056,14 +1056,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.0,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 6.75,
-    "p90_ms": 7.59,
-    "p95_ms": 7.94,
-    "p99_ms": 8.21,
-    "p999_ms": 8.95,
-    "p9999_ms": 8.95,
-    "cpu_per_1k": 61.73,
-    "rss_mb": 29.59,
+    "p50_ms": 6.83,
+    "p90_ms": 7.79,
+    "p95_ms": 8.02,
+    "p99_ms": 8.34,
+    "p999_ms": 10.28,
+    "p9999_ms": 10.28,
+    "cpu_per_1k": 63.12,
+    "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -1076,14 +1076,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 8.82,
-    "p90_ms": 9.66,
-    "p95_ms": 9.94,
-    "p99_ms": 10.46,
-    "p999_ms": 13.37,
-    "p9999_ms": 13.37,
-    "cpu_per_1k": 127.78,
-    "rss_mb": 107.53,
+    "p50_ms": 8.85,
+    "p90_ms": 9.61,
+    "p95_ms": 9.86,
+    "p99_ms": 10.38,
+    "p999_ms": 11.93,
+    "p9999_ms": 11.93,
+    "cpu_per_1k": 127.67,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1096,15 +1096,15 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 9.9,
-    "p90_ms": 10.93,
-    "p95_ms": 11.23,
-    "p99_ms": 11.85,
-    "p999_ms": 13.32,
-    "p9999_ms": 13.32,
-    "cpu_per_1k": 148.4,
-    "rss_mb": 150.03,
-    "survival": "100% Healthy (+1077 µs P50 vs Baseline)",
+    "p50_ms": 9.92,
+    "p90_ms": 10.81,
+    "p95_ms": 11.14,
+    "p99_ms": 11.63,
+    "p999_ms": 13.03,
+    "p9999_ms": 13.03,
+    "cpu_per_1k": 150.73,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+1073 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1116,14 +1116,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 1.72,
-    "p90_ms": 2.23,
-    "p95_ms": 2.31,
-    "p99_ms": 2.42,
-    "p999_ms": 2.48,
-    "p9999_ms": 2.48,
-    "cpu_per_1k": 7.46,
-    "rss_mb": 29.65,
+    "p50_ms": 2.02,
+    "p90_ms": 2.53,
+    "p95_ms": 2.62,
+    "p99_ms": 2.73,
+    "p999_ms": 3.78,
+    "p9999_ms": 3.78,
+    "cpu_per_1k": 7.71,
+    "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -1136,14 +1136,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 2.89,
-    "p90_ms": 3.39,
-    "p95_ms": 3.45,
-    "p99_ms": 3.53,
-    "p999_ms": 4.46,
-    "p9999_ms": 4.46,
-    "cpu_per_1k": 35.45,
-    "rss_mb": 107.54,
+    "p50_ms": 3.15,
+    "p90_ms": 3.63,
+    "p95_ms": 3.71,
+    "p99_ms": 3.82,
+    "p999_ms": 3.9,
+    "p9999_ms": 3.9,
+    "cpu_per_1k": 36.07,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1153,18 +1153,18 @@ const REFERENCE_TRIALS = [
     "regime": "steady-benign",
     "benign_profile": "BYTES Tensor [1, 2]",
     "rps": 100,
-    "achieved_rps": 100.1,
+    "achieved_rps": 100.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 4.06,
-    "p90_ms": 4.62,
-    "p95_ms": 4.71,
-    "p99_ms": 4.82,
-    "p999_ms": 5.6,
-    "p9999_ms": 5.6,
-    "cpu_per_1k": 69.24,
-    "rss_mb": 150.04,
-    "survival": "100% Healthy (+1173 µs P50 vs Baseline)",
+    "p50_ms": 3.96,
+    "p90_ms": 4.48,
+    "p95_ms": 4.57,
+    "p99_ms": 4.69,
+    "p999_ms": 4.79,
+    "p9999_ms": 4.79,
+    "cpu_per_1k": 68.25,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+811 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1176,14 +1176,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 1.79,
-    "p90_ms": 2.35,
-    "p95_ms": 2.5,
-    "p99_ms": 2.71,
-    "p999_ms": 2.82,
-    "p9999_ms": 2.82,
+    "p50_ms": 1.83,
+    "p90_ms": 2.44,
+    "p95_ms": 2.62,
+    "p99_ms": 2.79,
+    "p999_ms": 3.27,
+    "p9999_ms": 3.27,
     "cpu_per_1k": 7.38,
-    "rss_mb": 29.65,
+    "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
   },
@@ -1196,14 +1196,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 2.98,
-    "p90_ms": 3.6,
-    "p95_ms": 3.73,
-    "p99_ms": 3.96,
-    "p999_ms": 4.69,
-    "p9999_ms": 4.69,
-    "cpu_per_1k": 34.87,
-    "rss_mb": 107.54,
+    "p50_ms": 2.88,
+    "p90_ms": 3.49,
+    "p95_ms": 3.62,
+    "p99_ms": 3.82,
+    "p999_ms": 4.22,
+    "p9999_ms": 4.22,
+    "cpu_per_1k": 34.71,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1216,15 +1216,15 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 3.95,
-    "p90_ms": 4.55,
-    "p95_ms": 4.69,
-    "p99_ms": 4.92,
-    "p999_ms": 5.26,
-    "p9999_ms": 5.26,
-    "cpu_per_1k": 67.24,
-    "rss_mb": 150.04,
-    "survival": "100% Healthy (+970 µs P50 vs Baseline)",
+    "p50_ms": 3.93,
+    "p90_ms": 4.61,
+    "p95_ms": 4.76,
+    "p99_ms": 4.96,
+    "p999_ms": 5.61,
+    "p9999_ms": 5.61,
+    "cpu_per_1k": 68.65,
+    "rss_mb": 201.87,
+    "survival": "100% Healthy (+1050 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1236,13 +1236,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 2.18,
-    "p90_ms": 7.48,
-    "p95_ms": 7.73,
-    "p99_ms": 8.0,
-    "p999_ms": 8.42,
-    "p9999_ms": 8.42,
-    "cpu_per_1k": 23.74,
+    "p50_ms": 2.01,
+    "p90_ms": 7.34,
+    "p95_ms": 7.58,
+    "p99_ms": 7.85,
+    "p999_ms": 8.43,
+    "p9999_ms": 8.43,
+    "cpu_per_1k": 23.49,
     "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
@@ -1256,14 +1256,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 3.35,
-    "p90_ms": 9.89,
-    "p95_ms": 10.1,
-    "p99_ms": 10.46,
-    "p999_ms": 10.88,
-    "p9999_ms": 10.88,
-    "cpu_per_1k": 66.26,
-    "rss_mb": 134.91,
+    "p50_ms": 2.99,
+    "p90_ms": 9.48,
+    "p95_ms": 9.77,
+    "p99_ms": 10.09,
+    "p999_ms": 10.65,
+    "p9999_ms": 10.65,
+    "cpu_per_1k": 66.25,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1276,15 +1276,15 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 4.53,
-    "p90_ms": 12.87,
-    "p95_ms": 13.14,
-    "p99_ms": 13.46,
-    "p999_ms": 13.94,
-    "p9999_ms": 13.94,
-    "cpu_per_1k": 115.31,
+    "p50_ms": 4.61,
+    "p90_ms": 12.96,
+    "p95_ms": 13.3,
+    "p99_ms": 13.62,
+    "p999_ms": 14.05,
+    "p9999_ms": 14.05,
+    "cpu_per_1k": 114.26,
     "rss_mb": 201.87,
-    "survival": "100% Healthy (+1184 µs P50 vs Baseline)",
+    "survival": "100% Healthy (+1621 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1296,13 +1296,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.2,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 1.96,
-    "p90_ms": 7.43,
-    "p95_ms": 7.69,
-    "p99_ms": 8.08,
-    "p999_ms": 8.66,
-    "p9999_ms": 8.66,
-    "cpu_per_1k": 23.5,
+    "p50_ms": 1.87,
+    "p90_ms": 7.3,
+    "p95_ms": 7.53,
+    "p99_ms": 7.98,
+    "p999_ms": 8.48,
+    "p9999_ms": 8.48,
+    "cpu_per_1k": 23.45,
     "rss_mb": 46.22,
     "survival": "Control Floor (No Attack)",
     "trials_merged": 5
@@ -1316,14 +1316,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": null,
-    "p50_ms": 3.31,
-    "p90_ms": 10.08,
-    "p95_ms": 10.45,
-    "p99_ms": 10.92,
-    "p999_ms": 11.62,
-    "p9999_ms": 11.62,
-    "cpu_per_1k": 63.5,
-    "rss_mb": 134.91,
+    "p50_ms": 3.23,
+    "p90_ms": 9.91,
+    "p95_ms": 10.33,
+    "p99_ms": 10.81,
+    "p999_ms": 11.55,
+    "p9999_ms": 11.55,
+    "cpu_per_1k": 64.14,
+    "rss_mb": 135.31,
     "survival": "Hardened Envoy Baseline (No Attack)",
     "trials_merged": 5
   },
@@ -1337,14 +1337,14 @@ const REFERENCE_TRIALS = [
     "fpr": 0.0,
     "tp_drop": null,
     "p50_ms": 4.74,
-    "p90_ms": 13.23,
-    "p95_ms": 13.6,
-    "p99_ms": 14.05,
-    "p999_ms": 14.45,
-    "p9999_ms": 14.45,
-    "cpu_per_1k": 110.07,
+    "p90_ms": 13.22,
+    "p95_ms": 13.62,
+    "p99_ms": 14.1,
+    "p999_ms": 14.41,
+    "p9999_ms": 14.41,
+    "cpu_per_1k": 110.81,
     "rss_mb": 201.87,
-    "survival": "100% Healthy (+1432 µs P50 vs Baseline)",
+    "survival": "100% Healthy (+1512 µs P50 vs Baseline)",
     "trials_merged": 5
   },
   {
@@ -1356,13 +1356,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 2.2,
-    "p90_ms": 7.53,
-    "p95_ms": 7.83,
-    "p99_ms": 8.07,
-    "p999_ms": 8.39,
-    "p9999_ms": 8.39,
-    "cpu_per_1k": 15.97,
+    "p50_ms": 2.12,
+    "p90_ms": 7.48,
+    "p95_ms": 7.7,
+    "p99_ms": 7.97,
+    "p999_ms": 8.47,
+    "p9999_ms": 8.47,
+    "cpu_per_1k": 16.24,
     "rss_mb": 46.22,
     "survival": "Degraded (37 Backend Runtime Faults)",
     "trials_merged": 5
@@ -1376,14 +1376,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 3.14,
-    "p90_ms": 9.65,
-    "p95_ms": 9.93,
-    "p99_ms": 10.27,
-    "p999_ms": 10.76,
-    "p9999_ms": 10.76,
-    "cpu_per_1k": 44.53,
-    "rss_mb": 134.91,
+    "p50_ms": 3.18,
+    "p90_ms": 9.73,
+    "p95_ms": 9.98,
+    "p99_ms": 10.31,
+    "p999_ms": 10.68,
+    "p9999_ms": 10.68,
+    "cpu_per_1k": 44.03,
+    "rss_mb": 135.31,
     "survival": "Degraded (37 Backend Runtime Faults)",
     "trials_merged": 5
   },
@@ -1396,13 +1396,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 100.1,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 4.61,
-    "p90_ms": 12.96,
-    "p95_ms": 13.27,
-    "p99_ms": 13.65,
-    "p999_ms": 15.09,
-    "p9999_ms": 15.09,
-    "cpu_per_1k": 76.19,
+    "p50_ms": 4.55,
+    "p90_ms": 12.9,
+    "p95_ms": 13.18,
+    "p99_ms": 13.57,
+    "p999_ms": 14.69,
+    "p9999_ms": 14.69,
+    "cpu_per_1k": 76.24,
     "rss_mb": 201.87,
     "survival": "100% Protected (33/33 Exploits Dropped)",
     "trials_merged": 5
@@ -1416,13 +1416,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 1.99,
-    "p90_ms": 7.43,
-    "p95_ms": 7.68,
-    "p99_ms": 8.1,
-    "p999_ms": 8.73,
-    "p9999_ms": 8.73,
-    "cpu_per_1k": 15.95,
+    "p50_ms": 1.9,
+    "p90_ms": 7.31,
+    "p95_ms": 7.59,
+    "p99_ms": 8.01,
+    "p999_ms": 8.4,
+    "p9999_ms": 8.4,
+    "cpu_per_1k": 15.98,
     "rss_mb": 46.22,
     "survival": "Degraded (56 Backend Runtime Faults)",
     "trials_merged": 5
@@ -1436,14 +1436,14 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 149.9,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 3.35,
-    "p90_ms": 10.07,
-    "p95_ms": 10.4,
-    "p99_ms": 10.9,
-    "p999_ms": 11.47,
-    "p9999_ms": 11.47,
-    "cpu_per_1k": 42.96,
-    "rss_mb": 134.91,
+    "p50_ms": 3.29,
+    "p90_ms": 10.04,
+    "p95_ms": 10.38,
+    "p99_ms": 10.83,
+    "p999_ms": 12.89,
+    "p9999_ms": 12.89,
+    "cpu_per_1k": 42.33,
+    "rss_mb": 135.31,
     "survival": "Degraded (56 Backend Runtime Faults)",
     "trials_merged": 5
   },
@@ -1456,13 +1456,13 @@ const REFERENCE_TRIALS = [
     "achieved_rps": 150.1,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 5.45,
-    "p90_ms": 13.34,
-    "p95_ms": 13.67,
-    "p99_ms": 14.11,
-    "p999_ms": 15.67,
-    "p9999_ms": 15.67,
-    "cpu_per_1k": 72.97,
+    "p50_ms": 5.47,
+    "p90_ms": 13.28,
+    "p95_ms": 13.63,
+    "p99_ms": 14.12,
+    "p999_ms": 15.44,
+    "p9999_ms": 15.44,
+    "cpu_per_1k": 72.44,
     "rss_mb": 201.87,
     "survival": "100% Protected (33/33 Exploits Dropped)",
     "trials_merged": 5
@@ -1473,18 +1473,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 915.9,
+    "achieved_rps": 917.2,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 308.96,
-    "p90_ms": 511.18,
-    "p95_ms": 511.18,
-    "p99_ms": 511.34,
-    "p999_ms": 511.34,
-    "p9999_ms": 511.34,
-    "cpu_per_1k": 37.09,
+    "p50_ms": 317.04,
+    "p90_ms": 509.71,
+    "p95_ms": 509.87,
+    "p99_ms": 509.87,
+    "p999_ms": 509.87,
+    "p9999_ms": 509.87,
+    "cpu_per_1k": 35.78,
     "rss_mb": 46.22,
-    "survival": "Backend Flooded (Benign P99 511.3 ms)",
+    "survival": "Backend Flooded (Benign P99 509.9 ms)",
     "trials_merged": 5
   },
   {
@@ -1493,18 +1493,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 912.9,
+    "achieved_rps": 910.0,
     "fpr": 0.0,
     "tp_drop": 0.0,
-    "p50_ms": 323.12,
-    "p90_ms": 516.84,
-    "p95_ms": 517.94,
-    "p99_ms": 518.0,
-    "p999_ms": 518.0,
-    "p9999_ms": 518.0,
-    "cpu_per_1k": 81.99,
-    "rss_mb": 134.91,
-    "survival": "Backend Flooded (Benign P99 518.0 ms)",
+    "p50_ms": 324.95,
+    "p90_ms": 518.73,
+    "p95_ms": 518.73,
+    "p99_ms": 518.73,
+    "p999_ms": 518.73,
+    "p9999_ms": 518.73,
+    "cpu_per_1k": 78.04,
+    "rss_mb": 135.71,
+    "survival": "Backend Flooded (Benign P99 518.7 ms)",
     "trials_merged": 5
   },
   {
@@ -1513,18 +1513,18 @@ const REFERENCE_TRIALS = [
     "regime": "saturating-burst",
     "benign_profile": "Mixed (FP32 + BYTES + D≤16)",
     "rps": 500,
-    "achieved_rps": 3275.4,
+    "achieved_rps": 3060.3,
     "fpr": 0.0,
     "tp_drop": 1.0,
-    "p50_ms": 102.64,
-    "p90_ms": 150.92,
-    "p95_ms": 152.99,
-    "p99_ms": 153.01,
-    "p999_ms": 153.01,
-    "p9999_ms": 153.01,
-    "cpu_per_1k": 182.14,
+    "p50_ms": 112.63,
+    "p90_ms": 164.77,
+    "p95_ms": 167.34,
+    "p99_ms": 167.34,
+    "p999_ms": 167.34,
+    "p9999_ms": 167.34,
+    "cpu_per_1k": 200.05,
     "rss_mb": 201.87,
-    "survival": "100% Benign Survival (250/250 OK, Benign P99 153.0 ms)",
+    "survival": "100% Benign Survival (250/250 OK, Benign P99 167.3 ms)",
     "trials_merged": 5
   }
 ];
@@ -1539,13 +1539,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 602170,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 8.85,
+    "prod_latency_ms": 8.97,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 7.77,
+    "baseline_latency_ms": 7.55,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 6.31,
+    "control_latency_ms": 6.37,
     "notes": "resnet50 FP32 NCHW [1,3,224,224] source=synthetic tensor_bytes=602112"
   },
   {
@@ -1557,13 +1557,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 1204282,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 17.23,
+    "prod_latency_ms": 15.08,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 14.25,
+    "baseline_latency_ms": 13.8,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 11.25,
+    "control_latency_ms": 11.28,
     "notes": "resnet50 FP32 NCHW [2,3,224,224] source=synthetic tensor_bytes=1204224"
   },
   {
@@ -1575,13 +1575,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 2408507,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 37.91,
+    "prod_latency_ms": 28.75,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 25.92,
+    "baseline_latency_ms": 27.67,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 22.19,
+    "control_latency_ms": 21.92,
     "notes": "resnet50 FP32 NCHW [4,3,224,224] source=synthetic tensor_bytes=2408448"
   },
   {
@@ -1593,13 +1593,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 4816955,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 64.71,
+    "prod_latency_ms": 58.35,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 48.27,
+    "baseline_latency_ms": 48.04,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 43.38,
+    "control_latency_ms": 43.32,
     "notes": "resnet50 FP32 NCHW [8,3,224,224] source=synthetic tensor_bytes=4816896"
   },
   {
@@ -1611,13 +1611,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 9633852,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 127.45,
+    "prod_latency_ms": 122.45,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 105.32,
+    "baseline_latency_ms": 104.75,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 85.7,
+    "control_latency_ms": 85.66,
     "notes": "resnet50 FP32 NCHW [16,3,224,224] source=synthetic tensor_bytes=9633792"
   },
   {
@@ -1629,13 +1629,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 134,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.19,
+    "prod_latency_ms": 2.25,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.14,
+    "baseline_latency_ms": 1.72,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.69,
+    "control_latency_ms": 0.57,
     "notes": "KServe v2 BYTES tensor [1,2] with length-prefixed strings (73 B raw_input_contents)"
   },
   {
@@ -1647,14 +1647,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 42,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 1.95,
+    "prod_latency_ms": 2.34,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.23,
+    "baseline_latency_ms": 1.93,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.56,
-    "notes": "field-5 length-delimited wrap depth=15; boundary allow is D<=16"
+    "control_latency_ms": 0.44,
+    "notes": "field-4 length-delimited wrap depth=15; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_16",
@@ -1665,14 +1665,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 44,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 1.96,
+    "prod_latency_ms": 2.36,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.3,
+    "baseline_latency_ms": 1.93,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.66,
-    "notes": "field-5 length-delimited wrap depth=16; boundary allow is D<=16"
+    "control_latency_ms": 0.39,
+    "notes": "field-4 length-delimited wrap depth=16; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_17",
@@ -1683,14 +1683,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 46,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.72,
+    "prod_latency_ms": 1.91,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.43,
+    "baseline_latency_ms": 38.02,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.19,
-    "notes": "field-5 length-delimited wrap depth=17; boundary allow is D<=16"
+    "control_latency_ms": 36.98,
+    "notes": "field-4 length-delimited wrap depth=17; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_20",
@@ -1701,14 +1701,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 52,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.51,
+    "prod_latency_ms": 1.98,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.5,
+    "baseline_latency_ms": 38.05,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.09,
-    "notes": "field-5 length-delimited wrap depth=20; boundary allow is D<=16"
+    "control_latency_ms": 36.46,
+    "notes": "field-4 length-delimited wrap depth=20; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_50",
@@ -1719,14 +1719,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 112,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.67,
+    "prod_latency_ms": 2.17,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.76,
+    "baseline_latency_ms": 38.23,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.53,
-    "notes": "field-5 length-delimited wrap depth=50; boundary allow is D<=16"
+    "control_latency_ms": 37.47,
+    "notes": "field-4 length-delimited wrap depth=50; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_100",
@@ -1737,14 +1737,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 249,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 2.03,
+    "prod_latency_ms": 1.59,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 36.58,
+    "baseline_latency_ms": 38.18,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.41,
-    "notes": "field-5 length-delimited wrap depth=100; boundary allow is D<=16"
+    "control_latency_ms": 37.12,
+    "notes": "field-4 length-delimited wrap depth=100; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_250",
@@ -1755,14 +1755,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 699,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.83,
+    "prod_latency_ms": 1.63,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.9,
+    "baseline_latency_ms": 37.92,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.44,
-    "notes": "field-5 length-delimited wrap depth=250; boundary allow is D<=16"
+    "control_latency_ms": 36.11,
+    "notes": "field-4 length-delimited wrap depth=250; boundary allow is D<=16"
   },
   {
     "name": "nesting_depth_500",
@@ -1773,14 +1773,14 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 1449,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.93,
+    "prod_latency_ms": 1.71,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 36.82,
+    "baseline_latency_ms": 38.15,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.55,
-    "notes": "field-5 length-delimited wrap depth=500; boundary allow is D<=16"
+    "control_latency_ms": 37.25,
+    "notes": "field-4 length-delimited wrap depth=500; boundary allow is D<=16"
   },
   {
     "name": "shape_neg_packed",
@@ -1791,13 +1791,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 60,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.62,
+    "prod_latency_ms": 1.54,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.31,
+    "baseline_latency_ms": 38.05,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.04,
+    "control_latency_ms": 37.38,
     "notes": "packed shape [1,3,-1,224]; -1 is the 10-byte two's-complement varint"
   },
   {
@@ -1809,13 +1809,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 62,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.31,
+    "prod_latency_ms": 2.06,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.23,
+    "baseline_latency_ms": 38.15,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.51,
+    "control_latency_ms": 37.17,
     "notes": "unpacked shape [1,3,-1,224] via repeated tag 0x18"
   },
   {
@@ -1827,13 +1827,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 57,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.15,
+    "prod_latency_ms": 2.11,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.35,
+    "baseline_latency_ms": 38.24,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.4,
+    "control_latency_ms": 37.11,
     "notes": "packed shape [2, 2**62, 2] whose product is 0 mod 2**64"
   },
   {
@@ -1845,13 +1845,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 58,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.15,
+    "prod_latency_ms": 1.99,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.13,
+    "baseline_latency_ms": 38.02,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.44,
+    "control_latency_ms": 36.14,
     "notes": "unpacked shape [2, 2**62, 2]"
   },
   {
@@ -1863,13 +1863,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 52,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.14,
+    "prod_latency_ms": 1.9,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.44,
+    "baseline_latency_ms": 38.18,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.58,
+    "control_latency_ms": 37.04,
     "notes": "packed shape [1024,1024,1024] ~= 1.07e9 elements"
   },
   {
@@ -1881,13 +1881,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 53,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.31,
+    "prod_latency_ms": 1.76,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 36.64,
+    "baseline_latency_ms": 38.03,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.14,
+    "control_latency_ms": 37.39,
     "notes": "unpacked shape [1024,1024,1024]"
   },
   {
@@ -1899,13 +1899,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 16440,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 2.01,
+    "prod_latency_ms": 2.14,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.73,
+    "baseline_latency_ms": 38.53,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.63,
+    "control_latency_ms": 37.73,
     "notes": "16 KiB field 7 precedes malicious field 5 [1024,1024,1024]"
   },
   {
@@ -1917,13 +1917,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 118,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.46,
+    "prod_latency_ms": 1.81,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.35,
+    "baseline_latency_ms": 38.27,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.56,
+    "control_latency_ms": 37.59,
     "notes": "KServe v2 shape-to-buffer parity mismatch: shape [4,3,224,224] FP32 (2,408,448 B expected) with 64 B raw_input_contents"
   },
   {
@@ -1935,13 +1935,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 22,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.49,
+    "prod_latency_ms": 1.76,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.92,
+    "baseline_latency_ms": 38.0,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.56,
+    "control_latency_ms": 37.27,
     "notes": "tag 0x08 followed by 11 bytes of 0xFF (MSB=1)"
   },
   {
@@ -1953,13 +1953,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 75,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.6,
+    "prod_latency_ms": 1.82,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 37.04,
+    "baseline_latency_ms": 38.13,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.29,
+    "control_latency_ms": 37.27,
     "notes": "tag 0x08 followed by 64 bytes of 0x80 (MSB=1)"
   },
   {
@@ -1971,13 +1971,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 21,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.65,
+    "prod_latency_ms": 2.1,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.2,
+    "baseline_latency_ms": 38.49,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 36.91,
+    "control_latency_ms": 37.54,
     "notes": "tag 0x08, 9x 0xFF, terminating 0x7F with bits above a 64-bit shift"
   },
   {
@@ -1989,13 +1989,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 14,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.6,
+    "prod_latency_ms": 1.73,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.46,
+    "baseline_latency_ms": 38.32,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.12,
+    "control_latency_ms": 37.49,
     "notes": "tag 0x08 followed by 3 bytes of 0xFF and immediate EOF"
   },
   {
@@ -2007,13 +2007,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 268,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.56,
+    "prod_latency_ms": 2.0,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.56,
+    "baseline_latency_ms": 38.34,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.2,
+    "control_latency_ms": 37.55,
     "notes": "CVE-2024-7254-class: 64 nested Wire Type 3 (SGROUP) tags bypassing recursion counters"
   },
   {
@@ -2025,13 +2025,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 4510,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.68,
+    "prod_latency_ms": 1.89,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.52,
+    "baseline_latency_ms": 38.49,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.72,
+    "control_latency_ms": 37.51,
     "notes": "CVE-2022-1941 / CVE-2021-22569-class: 1,500 shallow unknown tags at D=0 (> 1,024 tag limit)"
   },
   {
@@ -2043,13 +2043,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 177,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.69,
+    "prod_latency_ms": 1.82,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.15,
+    "baseline_latency_ms": 38.33,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.2,
+    "control_latency_ms": 37.14,
     "notes": "CVE-2024-0088: shared_memory_region/offset/byte_size injected inside ModelInfer parameters map"
   },
   {
@@ -2061,13 +2061,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 57,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.41,
+    "prod_latency_ms": 1.72,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.11,
+    "baseline_latency_ms": 38.46,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 36.35,
+    "control_latency_ms": 37.37,
     "notes": "Compressed gRPC frame (flag=0x01 / gzip) concealing an OOM tensor payload from uncompressed wire inspection"
   },
   {
@@ -2079,13 +2079,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 102,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.49,
+    "prod_latency_ms": 2.47,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.35,
+    "baseline_latency_ms": 2.46,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.99,
+    "control_latency_ms": 1.04,
     "notes": "FP32 [4] then FP32 [1] with raw chunks of 16 then 4 bytes"
   },
   {
@@ -2097,13 +2097,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 86,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.48,
+    "prod_latency_ms": 2.16,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.38,
+    "baseline_latency_ms": 2.43,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.79,
+    "control_latency_ms": 1.16,
     "notes": "FP32 [1,4] as four unpacked fp32_contents (field 6, wire type 5), no raw_input_contents"
   },
   {
@@ -2115,13 +2115,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 82,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.53,
+    "prod_latency_ms": 2.21,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.45,
+    "baseline_latency_ms": 2.48,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.82,
+    "control_latency_ms": 1.16,
     "notes": "FP32 [1,4] as packed fp32_contents (field 6, wire type 2) holding float32 1,2,3,4, no raw_input_contents"
   },
   {
@@ -2133,13 +2133,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 113,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.52,
+    "prod_latency_ms": 2.04,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.3,
+    "baseline_latency_ms": 2.37,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.8,
+    "control_latency_ms": 1.11,
     "notes": "FP32 [1,4] raw of 16 bytes plus BYTES [1,2] with little-endian u32 prefixes"
   },
   {
@@ -2151,13 +2151,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 106,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.48,
+    "prod_latency_ms": 2.08,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.37,
+    "baseline_latency_ms": 2.38,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.9,
+    "control_latency_ms": 1.05,
     "notes": "FP32 [1,4] with InferParameter key binary_data_size on int64_param field 2"
   },
   {
@@ -2169,13 +2169,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 63,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.44,
+    "prod_latency_ms": 2.35,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.24,
+    "baseline_latency_ms": 2.34,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.99,
+    "control_latency_ms": 1.09,
     "notes": "FP32 [1,0,224,224] with an empty raw_input_contents. KServe allows a zero axis"
   },
   {
@@ -2187,13 +2187,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 58,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.58,
+    "prod_latency_ms": 2.31,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.37,
+    "baseline_latency_ms": 2.48,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 1.07,
+    "control_latency_ms": 1.05,
     "notes": "BOOL [1,4] with a 4-byte raw chunk"
   },
   {
@@ -2205,13 +2205,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 62,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.57,
+    "prod_latency_ms": 2.35,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.24,
+    "baseline_latency_ms": 2.27,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 1.04,
+    "control_latency_ms": 1.0,
     "notes": "FP16 [1,4] with an 8-byte raw chunk"
   },
   {
@@ -2223,13 +2223,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 62,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.55,
+    "prod_latency_ms": 2.38,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.22,
+    "baseline_latency_ms": 2.27,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 1.06,
+    "control_latency_ms": 0.99,
     "notes": "BF16 [1,4] with an 8-byte raw chunk"
   },
   {
@@ -2241,13 +2241,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 86,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.37,
+    "prod_latency_ms": 2.35,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.4,
+    "baseline_latency_ms": 2.27,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.96,
+    "control_latency_ms": 0.91,
     "notes": "FP64 [1,4] with a 32-byte raw chunk"
   },
   {
@@ -2259,13 +2259,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 92,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.93,
+    "prod_latency_ms": 1.74,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.15,
+    "baseline_latency_ms": 38.09,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.44,
+    "control_latency_ms": 37.26,
     "notes": "FP32 [4] bound to a 4-byte chunk and FP32 [1] bound to a 16-byte chunk"
   },
   {
@@ -2277,13 +2277,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 93,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.91,
+    "prod_latency_ms": 1.69,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.32,
+    "baseline_latency_ms": 38.36,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.39,
+    "control_latency_ms": 37.54,
     "notes": "Two tensors expecting 16 and 4 bytes, with a single 20-byte raw chunk"
   },
   {
@@ -2295,13 +2295,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 97,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 2.02,
+    "prod_latency_ms": 1.82,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.59,
+    "baseline_latency_ms": 38.49,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.6,
+    "control_latency_ms": 37.23,
     "notes": "Swapped raw chunks written before the inputs. Binding is by index, not wire order"
   },
   {
@@ -2313,13 +2313,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 89,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.91,
+    "prod_latency_ms": 1.71,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.5,
+    "baseline_latency_ms": 38.39,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.34,
+    "control_latency_ms": 37.25,
     "notes": "FP32 [4,3,224,224] with four unpacked fp32 values and no raw_input_contents"
   },
   {
@@ -2331,13 +2331,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 74,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 2.12,
+    "prod_latency_ms": 1.76,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.37,
+    "baseline_latency_ms": 38.59,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.17,
+    "control_latency_ms": 37.29,
     "notes": "FP32 [16777216] with one unpacked fp32 value and no raw_input_contents"
   },
   {
@@ -2349,13 +2349,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 71,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.72,
+    "prod_latency_ms": 1.92,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.1,
+    "baseline_latency_ms": 38.44,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.1,
+    "control_latency_ms": 37.3,
     "notes": "BYTES [1] whose little-endian u32 length is 0xFFFFFFFF inside an 8-byte chunk"
   },
   {
@@ -2367,13 +2367,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 97,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.9,
+    "prod_latency_ms": 2.01,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.35,
+    "baseline_latency_ms": 38.59,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.17,
+    "control_latency_ms": 37.36,
     "notes": "FP32 [4] chunk of 4 bytes compensated by a 16-byte BYTES chunk"
   },
   {
@@ -2385,13 +2385,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 126,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.92,
+    "prod_latency_ms": 1.91,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.5,
+    "baseline_latency_ms": 38.28,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.59,
+    "control_latency_ms": 37.15,
     "notes": "Four FP32 [16777216] tensors and no raw chunks. Declared elements are 4 times the per-tensor ceiling"
   },
   {
@@ -2403,13 +2403,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 100060,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 3.13,
+    "prod_latency_ms": 3.35,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 39.7,
+    "baseline_latency_ms": 39.61,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 38.47,
+    "control_latency_ms": 38.2,
     "notes": "One packed shape of 100000 dimensions of 1 (product stays 1). latency_ns is the measurement against the 250 ms ext_proc deadline"
   },
   {
@@ -2421,13 +2421,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 76,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 2.06,
+    "prod_latency_ms": 1.99,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.58,
+    "baseline_latency_ms": 37.73,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.31,
+    "control_latency_ms": 37.23,
     "notes": "FP64 [1,4] with a 16-byte raw chunk (the FP32 length)"
   },
   {
@@ -2439,13 +2439,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 76,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.8,
+    "prod_latency_ms": 1.91,
     "baseline_status": "INTERNAL",
     "baseline_match": false,
-    "baseline_latency_ms": 38.23,
+    "baseline_latency_ms": 38.51,
     "control_status": "INTERNAL",
     "control_match": false,
-    "control_latency_ms": 37.35,
+    "control_latency_ms": 37.18,
     "notes": "Datatype 'FP32 ' (trailing space) on shape [1,4] with a 16-byte raw chunk. Unknown width fails closed"
   },
   {
@@ -2457,13 +2457,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 57,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 2.84,
+    "prod_latency_ms": 3.22,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 3.21,
+    "baseline_latency_ms": 3.1,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 2.08,
+    "control_latency_ms": 1.63,
     "notes": "One uncompressed gRPC frame whose declared length equals the body. Sent as the HTTP body, not via tonic"
   },
   {
@@ -2475,13 +2475,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 114,
     "prod_status": "INVALID_ARGUMENT",
     "prod_match": true,
-    "prod_latency_ms": 1.94,
+    "prod_latency_ms": 2.19,
     "baseline_status": "OK",
     "baseline_match": false,
-    "baseline_latency_ms": 3.02,
+    "baseline_latency_ms": 2.81,
     "control_status": "OK",
     "control_match": false,
-    "control_latency_ms": 1.36,
+    "control_latency_ms": 1.17,
     "notes": "Two complete frames concatenated in one HTTP body"
   },
   {
@@ -2493,13 +2493,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 114,
     "prod_status": "PERMISSION_DENIED",
     "prod_match": true,
-    "prod_latency_ms": 1.56,
+    "prod_latency_ms": 2.13,
     "baseline_status": "OTHER",
     "baseline_match": false,
-    "baseline_latency_ms": 2.55,
+    "baseline_latency_ms": 2.32,
     "control_status": "OTHER",
     "control_match": false,
-    "control_latency_ms": 1.48,
+    "control_latency_ms": 1.23,
     "notes": "ModelStreamInfer is not on the RPC allowlist. The body is also two frames"
   },
   {
@@ -2511,13 +2511,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 0,
     "prod_status": "OK",
     "prod_match": true,
-    "prod_latency_ms": 1.81,
+    "prod_latency_ms": 2.01,
     "baseline_status": "OK",
     "baseline_match": true,
-    "baseline_latency_ms": 2.49,
+    "baseline_latency_ms": 1.87,
     "control_status": "OK",
     "control_match": true,
-    "control_latency_ms": 0.83,
+    "control_latency_ms": 1.02,
     "notes": "Empty ModelInfer message. The framed body is a zero-length protobuf"
   },
   {
@@ -2529,13 +2529,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 0,
     "prod_status": "PERMISSION_DENIED",
     "prod_match": true,
-    "prod_latency_ms": 1.15,
+    "prod_latency_ms": 1.52,
     "baseline_status": "OTHER",
     "baseline_match": false,
-    "baseline_latency_ms": 1.88,
+    "baseline_latency_ms": 1.63,
     "control_status": "OTHER",
     "control_match": false,
-    "control_latency_ms": 0.54,
+    "control_latency_ms": 0.72,
     "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403, and the body is not forwarded"
   },
   {
@@ -2547,13 +2547,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 0,
     "prod_status": "PERMISSION_DENIED",
     "prod_match": true,
-    "prod_latency_ms": 1.19,
+    "prod_latency_ms": 1.33,
     "baseline_status": "OTHER",
     "baseline_match": false,
-    "baseline_latency_ms": 1.77,
+    "baseline_latency_ms": 1.61,
     "control_status": "OTHER",
     "control_match": false,
-    "control_latency_ms": 0.59,
+    "control_latency_ms": 0.53,
     "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
   },
   {
@@ -2565,13 +2565,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 0,
     "prod_status": "PERMISSION_DENIED",
     "prod_match": true,
-    "prod_latency_ms": 1.27,
+    "prod_latency_ms": 1.41,
     "baseline_status": "OTHER",
     "baseline_match": false,
-    "baseline_latency_ms": 1.61,
+    "baseline_latency_ms": 1.67,
     "control_status": "OTHER",
     "control_match": false,
-    "control_latency_ms": 0.58,
+    "control_latency_ms": 0.62,
     "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
   },
   {
@@ -2583,13 +2583,13 @@ const ORACLE_SWEEP_ROWS = [
     "tx_bytes": 0,
     "prod_status": "PERMISSION_DENIED",
     "prod_match": true,
-    "prod_latency_ms": 1.34,
+    "prod_latency_ms": 1.43,
     "baseline_status": "OTHER",
     "baseline_match": false,
-    "baseline_latency_ms": 1.65,
+    "baseline_latency_ms": 1.7,
     "control_status": "OTHER",
     "control_match": false,
-    "control_latency_ms": 0.6,
+    "control_latency_ms": 0.7,
     "notes": "Header allowlist probe. Expected block is PERMISSION_DENIED or HTTP 403"
   }
 ];
@@ -2650,11 +2650,21 @@ function initTheme() {
 
 // 2. Interactive KServe v2 Builder & Byte-Stream Anatomy Inspector
 const DTYPE_BYTE_WIDTHS = {
-  FP32: 4,
-  FP64: 8,
-  INT64: 8,
-  FP16: 2,
   BOOL: 1,
+  INT8: 1,
+  UINT8: 1,
+  FP8E4M3FN: 1,
+  FP8E5M2: 1,
+  INT16: 2,
+  UINT16: 2,
+  FP16: 2,
+  BF16: 2,
+  INT32: 4,
+  UINT32: 4,
+  FP32: 4,
+  INT64: 8,
+  UINT64: 8,
+  FP64: 8,
   BYTES: 0, // variable length via 4-byte u32 prefixes
   INVALID_DTYPE: -1
 };
@@ -2928,15 +2938,20 @@ function evaluateSingleTensor(tensor, chunk) {
     const elemCount = Number(prod);
     const minRequired = elemCount * 4;
     const prefixLen = Math.max(0, Number(chunk.u32Prefix || 0));
-    const totalNeeded = 4 + prefixLen + Math.max(0, elemCount - 1) * 4;
-    if (chunk.byteLength < minRequired || (elemCount > 0 && totalNeeded > chunk.byteLength)) {
+    const totalNeeded = elemCount === 0 ? 0 : 4 + prefixLen + Math.max(0, elemCount - 1) * 4;
+    if (
+      chunk.byteLength < minRequired ||
+      (elemCount === 0 && chunk.byteLength !== 0) ||
+      (elemCount === 1 && totalNeeded !== chunk.byteLength) ||
+      (elemCount > 1 && totalNeeded > chunk.byteLength)
+    ) {
       return {
         ok: false,
-        error: `ParseError::PayloadSizeMismatch (BYTES u32 prefix ${prefixLen}B > ${chunk.byteLength}B chunk)`,
+        error: `ParseError::PayloadSizeMismatch { expected_bytes: ${totalNeeded}, actual_bytes: ${chunk.byteLength} }`,
         elements: prod,
         expectedBytes: totalNeeded,
         actualBytes: chunk.byteLength,
-        reason: `4B length prefix (${prefixLen}B) over-reads ${chunk.byteLength}B chunk`
+        reason: `4B length prefix (${prefixLen}B) mismatches ${chunk.byteLength}B chunk`
       };
     }
     return {
@@ -2953,7 +2968,7 @@ function evaluateSingleTensor(tensor, chunk) {
   if (chunk.byteLength !== expectedBytes) {
     return {
       ok: false,
-      error: `ParseError::PayloadSizeMismatch { expected: ${expectedBytes}, actual: ${chunk.byteLength} }`,
+      error: `ParseError::PayloadSizeMismatch { expected_bytes: ${expectedBytes}, actual_bytes: ${chunk.byteLength} }`,
       elements: prod,
       expectedBytes,
       actualBytes: chunk.byteLength,
@@ -2985,7 +3000,7 @@ function evaluateBuilderState() {
   if (builderState.nestingDepth > MAX_NESTING_DEPTH) {
     firstError = `ParseError::NestingLimitExceeded(${builderState.nestingDepth})`;
   } else if (builderState.tagsScanned > MAX_TAGS_SCANNED) {
-    firstError = `ParseError::TagLimitExceeded (${builderState.tagsScanned} > 1,024)`;
+    firstError = `ParseError::TagLimitExceeded { max_tags: 1024 } (${builderState.tagsScanned} scanned)`;
   } else {
     for (const res of tensorResults) {
       if (!res.ok) {
@@ -3028,7 +3043,7 @@ function renderBuilderAll() {
     tensorsListEl.innerHTML = builderState.tensors
       .map((t, idx) => {
         const res = evalRes.tensorResults[idx];
-        const dtypes = ["FP32", "FP64", "INT64", "FP16", "BOOL", "BYTES", "INVALID_DTYPE"];
+        const dtypes = Object.keys(DTYPE_BYTE_WIDTHS);
         const optionsHtml = dtypes
           .map((dt) => `<option value="${dt}" ${t.datatype === dt ? "selected" : ""}>${dt}</option>`)
           .join("");
@@ -3731,14 +3746,17 @@ function renderBurstCdfSvg() {
     out += `<text x="${x}" y="${H - 10}" fill="${textColor}" font-size="10" font-weight="600" text-anchor="middle">${lbl}</text>`;
   });
 
-  // Draw P99 3.4x survival gap callout bracket between Baseline (518.0 ms) and Custos (153.0 ms)
+  // Draw P99 survival gap callout bracket between Baseline and Custos dynamically from burstTrials
+  const baseBurst = burstTrials.find((t) => String(t.topology).includes("Baseline")) || { p99_ms: 518.73 };
+  const prodBurst = burstTrials.find((t) => String(t.topology).includes("Custos")) || { p99_ms: 167.34 };
+  const p99Ratio = (baseBurst.p99_ms / Math.max(prodBurst.p99_ms, 1)).toFixed(1);
   const p99X = xFor(3);
-  const yTop = yFor(518.0);
-  const yBot = yFor(153.01);
+  const yTop = yFor(baseBurst.p99_ms);
+  const yBot = yFor(prodBurst.p99_ms);
   const midY = (yTop + yBot) / 2;
   out += `<line x1="${p99X}" y1="${yTop + 4}" x2="${p99X}" y2="${yBot - 4}" stroke="${greenColor}" stroke-width="2" stroke-dasharray="4,3" />`;
   out += `<rect x="${p99X - 78}" y="${midY - 12}" width="156" height="22" rx="11" fill="${crustColor}" stroke="${greenColor}" stroke-width="1.5" />`;
-  out += `<text x="${p99X}" y="${midY + 3}" fill="${greenColor}" font-size="9.5" font-weight="700" text-anchor="middle">3.4× Lower P99 (153.0 ms)</text>`;
+  out += `<text x="${p99X}" y="${midY + 3}" fill="${greenColor}" font-size="9.5" font-weight="700" text-anchor="middle">${p99Ratio}× Lower P99 (${prodBurst.p99_ms.toFixed(1)} ms)</text>`;
 
   burstTrials.forEach((t, idx) => {
     const color = getTopologyColor(t.topology, styles);
@@ -3791,12 +3809,18 @@ function renderBatchScalingSvg() {
   const blueColor = styles.getPropertyValue("--ctp-blue").trim();
   const crustColor = styles.getPropertyValue("--ctp-crust").trim();
 
+  const deltaFor = (name, fallback) => {
+    const row = ORACLE_SWEEP_ROWS.find((r) => r.name === name);
+    if (!row) return fallback;
+    return Math.max(0.05, Number((row.prod_latency_ms - row.baseline_latency_ms).toFixed(2)));
+  };
+
   const batches = [
-    { b: "1 image", kb: "602 KB", bytes: 602112, custosMs: 0.014, linearMs: 0.62, udsDeltaMs: 1.08 },
-    { b: "2 images", kb: "1.20 MB", bytes: 1204224, custosMs: 0.014, linearMs: 1.24, udsDeltaMs: 2.98 },
-    { b: "4 images", kb: "2.41 MB", bytes: 2408448, custosMs: 0.015, linearMs: 2.48, udsDeltaMs: 11.99 },
-    { b: "8 images", kb: "4.82 MB", bytes: 4816896, custosMs: 0.015, linearMs: 4.96, udsDeltaMs: 16.44 },
-    { b: "16 images", kb: "9.63 MB", bytes: 9633792, custosMs: 0.015, linearMs: 9.92, udsDeltaMs: 22.13 }
+    { b: "1 image", kb: "602 KB", bytes: 602112, custosMs: 0.014, linearMs: 0.62, udsDeltaMs: deltaFor("benign_b1", 1.42) },
+    { b: "2 images", kb: "1.20 MB", bytes: 1204224, custosMs: 0.014, linearMs: 1.24, udsDeltaMs: deltaFor("benign_b2", 1.28) },
+    { b: "4 images", kb: "2.41 MB", bytes: 2408448, custosMs: 0.015, linearMs: 2.48, udsDeltaMs: deltaFor("benign_b4", 1.08) },
+    { b: "8 images", kb: "4.82 MB", bytes: 4816896, custosMs: 0.015, linearMs: 4.96, udsDeltaMs: deltaFor("benign_b8", 10.31) },
+    { b: "16 images", kb: "9.63 MB", bytes: 9633792, custosMs: 0.015, linearMs: 9.92, udsDeltaMs: deltaFor("benign_b16", 17.70) }
   ];
 
   const W = 540;
@@ -3852,7 +3876,7 @@ function renderBatchScalingSvg() {
   const midX = xFor(2);
   const flatY = yFor(0.015);
   out += `<rect x="${midX - 96}" y="${flatY - 26}" width="192" height="20" rx="10" fill="${crustColor}" stroke="${greenColor}" stroke-width="1.5" />`;
-  out += `<text x="${midX}" y="${flatY - 13}" fill="${greenColor}" font-size="9" font-weight="700" text-anchor="middle">Custos checks 63 bytes</text>`;
+  out += `<text x="${midX}" y="${flatY - 13}" fill="${greenColor}" font-size="9" font-weight="700" text-anchor="middle">Custos checks 63–65 bytes</text>`;
 
   batches.forEach((d, i) => {
     const x = xFor(i);

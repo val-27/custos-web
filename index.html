@@ -618,7 +618,7 @@
           </div>
 
           <p class="evaluation-method-note">The performance tests use the same hardware and run five times. The results table shows the average. In the normal and mixed tests, the client sends requests on a set schedule, even when replies are slow. The response-time measure includes time spent waiting for a reply. This helps us see delays that a slow server could otherwise hide. The page shows saved results, not live measurements.</p>
-          <p class="evaluation-limit"><strong>How we reach the evaluation:</strong> Custos matched all 59 expected safety results. It allowed 20 normal requests and blocked 39 test attacks. During the burst test, all 250 normal requests succeeded. Their slowest 1 in 100 replies took 153 ms. The other setups took 511 to 518 ms. Custos check time stayed near 14 to 15 microseconds as image data grew from 0.6 to 9.6 MB. These results support Custos for these tests. They do not prove that every possible attack will be blocked. The tests set no single speed limit. Compare the added time with your needs.</p>
+          <p class="evaluation-limit"><strong>How we reach the evaluation:</strong> Custos matched all 59 expected safety results. It allowed 20 normal requests and blocked 39 test attacks. During the burst test, all 250 normal requests succeeded. Their slowest 1 in 100 replies took 167 ms. The other setups took 510 to 519 ms. Custos check time stayed near 14 to 15 microseconds as image data grew from 0.6 to 9.6 MB. These results support Custos for these tests. They do not prove that every possible attack will be blocked. The tests set no single speed limit. Compare the added time with your needs.</p>
         </div>
       </details>
 
@@ -627,15 +627,15 @@
         <div class="chart-box reveal">
           <div class="chart-title-row">
             <h4>Response time during a large attack burst</h4>
-            <span class="badge badge-green mono">3.4× faster for slow replies</span>
+            <span class="badge badge-green mono">3.1× faster for slow replies</span>
           </div>
           <p class="chart-lead">
-            This chart compares how long normal requests take during a burst of attack requests. The bottom labels show how many of 100 requests have replied. The side labels show reply time. Each step up is 10 times longer. Lower points mean faster replies. For the slowest 1 in 100 requests, Custos replies in 153 ms. The other setups take about 511 to 518 ms.
+            This chart compares how long normal requests take during a burst of attack requests. The bottom labels show how many of 100 requests have replied. The side labels show reply time. Each step up is 10 times longer. Lower points mean faster replies. For the slowest 1 in 100 requests, Custos replies in 167 ms. The other setups take about 510 to 519 ms.
           </p>
           <div class="chart-sub">
-            <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection (511 ms)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only (518 ms)</span>
-            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>With Custos (153 ms)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-control"></span>No protection (510 ms)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-baseline"></span>Proxy only (519 ms)</span>
+            <span class="chart-legend-item"><span class="legend-dot is-custos"></span>With Custos (167 ms)</span>
           </div>
           <svg id="burst-cdf-svg" class="svg-chart" viewBox="0 0 540 250" preserveAspectRatio="none"></svg>
         </div>
@@ -643,7 +643,7 @@
         <div class="chart-box reveal">
           <div class="chart-title-row">
             <h4>Time to check requests as image size grows</h4>
-            <span class="badge badge-mauve mono">Checks 63 bytes in a 9.63 MB request</span>
+            <span class="badge badge-mauve mono">Checks 63–65 bytes in a 9.63 MB request</span>
           </div>
           <p class="chart-lead">
             The labels below show image size. The labels on the left show check time. µs means microseconds. Each step up is 10 times longer. The green line stays almost flat as the image gets larger. The red line rises because it reads all the data.
